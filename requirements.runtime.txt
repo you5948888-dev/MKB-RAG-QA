@@ -1,0 +1,52 @@
+# ── 运行期依赖（唯一事实来源）────────────────────────────────
+# 用途：Docker 镜像与部署环境只装本文件（Dockerfile 会把它复制成镜像内的 requirements.txt）。
+# 约定：全部固定版本（==），保证不同日期构建结果一致。
+# 本机开发：pip install -r requirements.txt（= 本文件 + pytest / httpx / gevent 等开发工具）。
+#
+# 【维护提示】新增第三方依赖**先加这里**，requirements.txt 通过 `-r` 引用本文件；
+#   若只加进开发清单，会出现"本机能跑、容器里 ImportError"。
+#   下面这份清单是按 AST 静态扫描全部 py 文件的 import 逐个核对出来的，不要凭印象删减。
+
+# ── Web 框架 / ASGI ──
+fastapi==0.141.1
+uvicorn==0.52.4
+# WebSocket 协议实现：uvicorn 处理 WS 端点依赖它（本项目有 WS 流式问答）
+websockets==16.1.1
+# 文件上传（UploadFile / Form）运行期依赖，FastAPI 缺它会直接报错
+python-multipart==0.0.32
+
+# ── 配置与数据模型 ──
+python-dotenv==1.2.3
+pydantic==2.13.4
+# 注：starlette 由 fastapi 传递安装（middleware.py 使用），不单独固定，避免与 fastapi 版本冲突
+
+# ── LLM 客户端 / 分块 / 追踪 ──
+langchain-openai==1.6.0
+langchain-core==1.6.0
+# 递归字符分块（chunking.py：通用分块与父子分块都基于它）
+langchain-text-splitters==1.1.2
+# 可选 LLM 追踪（默认关闭，见 langsmith_tracing.py）
+langsmith==0.11.0
+
+# ── 向量库 ──
+pymilvus==3.0.1
+
+# ── 文档解析（text_parser.py）──
+pypdf==6.15.0
+python-docx==1.2.0
+
+# ── 分块长度口径 token（chunking.py 惰性加载，缺失则 token 口径不可用）──
+tiktoken==0.13.0
+
+# ── 认证（bcrypt 密码哈希）──
+bcrypt==4.0.1
+
+# ── 异步任务队列（Celery + Redis Broker/Result）──
+celery[redis]==5.6.3
+redis==6.4.0
+
+# ── 流式问答（SSE）──
+sse-starlette==3.4.11
+
+# ── 外部 HTTP 调用（BGE 向量化/Rerank、LLM、依赖健康探测）──
+requests==2.34.2

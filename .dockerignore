@@ -1,0 +1,32 @@
+# ── 敏感配置：真实凭据只在部署时通过 env_file 注入，不能烘焙进镜像 ──
+.env
+.env.*
+
+# ── 运行数据：SQLite、上传文件、反馈数据由数据卷提供 ──
+data/
+
+# ── Python 缓存与虚拟环境 ──
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# ── 测试与开发脚本 ──
+tests/
+pytest.ini
+scripts/
+.pytest_cache/
+.pytest-tmp/
+.coverage
+
+# ── 日志、归档与文档 ──
+*.log
+*.tmp
+*.zip
+*.md
+
+# ── 版本控制与本地副本 ──
+.git/
+.gitignore
+code - 副本/

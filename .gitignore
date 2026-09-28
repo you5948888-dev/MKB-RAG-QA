@@ -1,0 +1,77 @@
+# ════════════════════════════════════════════════════════════
+#  .gitignore —— 上传 GitHub 前的检查清单
+#  原则：凭据、真实数据、私有文档、本机产物一律不进仓库
+#
+#  ⚠️ 注意：.gitignore 的注释必须**独占一行**。
+#  写成 "HANDOVER.md   # 说明" 会被当成一个含空格的完整文件名，规则失效。
+# ════════════════════════════════════════════════════════════
+
+# ── 1. 敏感配置（含真实凭据：数据库地址、API Key、签名密钥、Redis 密码）──
+# 只允许提交 *.example 模板；模板里必须是占位符，不能是真实值
+.env
+.env.docker
+.env.compose
+
+# ── 2. 运行期真实数据（绝不上传）──
+# data/ 下有 chat_memory.db（会话/知识库/分块/观测数据）、feedback.json、
+# 以及 data/uploads/ 里用户上传的原始文档 —— 既含隐私也可能是企业内部资料
+data/
+*.db
+*.sqlite
+*.sqlite3
+
+# ── 3. 私有文档（含内网地址/口令、个人简历等，不适合公开）──
+# HANDOVER.md：交接文档，含内网 Milvus/BGE/LLM 地址与 Redis 口令
+HANDOVER.md
+# 简历-项目经历.md：个人简历素材
+简历-项目经历.md
+# docs/：交付验收手册、VM 构建镜像步骤等，均为本机操作文档（含部署环境细节）
+docs/
+# 以后若要公开设计文档：改为下面的白名单写法
+#   docs/*
+#   !docs/公开设计说明.md
+
+# ── 4. 本机试运行产物（根目录手工上传的测试文档）──
+/test_*.txt
+/test_*.docx
+/test_*.pdf
+generated-images/
+*.log
+logs/
+
+# ── 5. 本机遗留 / 脚手架文件（未被任何代码引用，仅本机保留）──
+# main.py = PyCharm 新建工程自带示例；state.py = Ch2 内存态实现（已被 SQLite 取代）
+# 如确实需要提交，用 git add -f 强制添加
+/main.py
+/state.py
+
+# ── 6. Python ──
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+build/
+dist/
+.venv/
+venv/
+env/
+
+# ── 7. 测试与静态检查缓存 ──
+.pytest_cache/
+.pytest-tmp/
+.coverage
+coverage.xml
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+.tox/
+
+# ── 8. IDE / 工具 / 系统 ──
+# .codebuddy/：AI 助手会话与项目状态（非源码）
+.codebuddy/
+.idea/
+.vscode/
+*.swp
+.DS_Store
+Thumbs.db
+desktop.ini

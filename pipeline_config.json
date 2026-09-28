@@ -1,0 +1,7 @@
+{
+  "enable_rerank": true,
+  "retrieval_top_k": 5,
+  "dense_weight": 0.5,
+  "sparse_weight": 0.5,
+  "candidate_k": 20
+}

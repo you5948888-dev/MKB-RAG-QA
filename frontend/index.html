@@ -1,0 +1,1218 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RAG 问答</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, "Microsoft YaHei", sans-serif; background: #f5f5f5; color: #333; }
+        .app { display: flex; height: 100vh; }
+
+        /* 左侧会话列表 */
+        .sidebar {
+            width: 260px; background: #fff; border-right: 1px solid #e8e8e8;
+            display: flex; flex-direction: column;
+        }
+        .sidebar-header {
+            padding: 16px; border-bottom: 1px solid #e8e8e8;
+            display: flex; justify-content: space-between; align-items: center;
+        }
+        .sidebar-header h2 { font-size: 16px; }
+        .sidebar-header .btn-back { margin-bottom: 0; }
+        .session-list { flex: 1; overflow-y: auto; padding: 8px; }
+        .session-item {
+            padding: 10px 12px; border-radius: 6px; cursor: pointer;
+            margin-bottom: 4px; font-size: 13px; color: #666;
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+            position: relative;
+        }
+        .session-item:hover { background: #f0f0f0; }
+        .session-item.active { background: #e6f4ff; color: #1677ff; font-weight: 600; }
+        .session-item .session-time { font-size: 11px; color: #bbb; margin-top: 2px; }
+
+        /* 会话操作按钮（Ch7 新增：重命名 / 删除） */
+        .session-actions {
+            position: absolute; right: 8px; top: 50%; transform: translateY(-50%);
+            display: none; gap: 4px;
+        }
+        .session-item:hover .session-actions { display: flex; }
+        .btn-session-action {
+            padding: 2px 6px; border: none; border-radius: 3px;
+            background: transparent; cursor: pointer; font-size: 12px; color: #999;
+        }
+        .btn-session-action:hover { background: #e8e8e8; color: #333; }
+        .btn-session-action.btn-delete:hover { background: #fff1f0; color: #ff4d4f; }
+
+        /* 右侧主区域 */
+        .main { flex: 1; display: flex; flex-direction: column; }
+        .main-header {
+            padding: 16px 20px; background: #fff; border-bottom: 1px solid #e8e8e8;
+            display: flex; justify-content: space-between; align-items: center;
+        }
+        .main-header h1 { font-size: 18px; }
+        .main-header .header-actions { display: flex; align-items: center; gap: 12px; }
+        .main-header .btn-back { margin-bottom: 0; }
+        .btn-back { padding: 6px 12px; border: 1px solid #d9d9d9; border-radius: 6px;
+            background: #fff; cursor: pointer; font-size: 13px; }
+        .btn-back:hover { background: #f5f5f5; }
+
+        /* 清空消息按钮（Ch7 新增，红色描边） */
+        .btn-clear {
+            padding: 5px 12px; font-size: 12px; border: 1px solid #ff4d4f; border-radius: 4px;
+            background: #fff; color: #ff4d4f; cursor: pointer;
+        }
+        .btn-clear:hover { background: #fff1f0; }
+
+        /* 消息区域 */
+        .messages { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; }
+        .message { margin-bottom: 18px; width: 100%; display: flex; flex-direction: column; }
+        .message-user { align-items: flex-end; }
+        .message-assistant { align-items: flex-start; }
+        .message-role { font-size: 12px; font-weight: 600; color: #999; margin-bottom: 4px; }
+        .message-content {
+            padding: 12px 16px; border-radius: 8px; font-size: 14px;
+            line-height: 1.7; white-space: pre-wrap; word-break: break-word;
+            max-width: 760px;
+        }
+        .message-user .message-content { background: #1677ff; color: #fff; margin-left: 40px; border-top-right-radius: 0; }
+        .message-assistant .message-content {
+            background: #fff; border: 1px solid #e8e8e8;
+            margin-left: 40px; margin-right: 40px; border-top-left-radius: 0;
+        }
+
+        /* 引用卡片 */
+        .citation-card {
+            background: #fafafa; border: 1px solid #e8e8e8; border-radius: 6px;
+            padding: 10px 12px; margin-top: 8px; margin-left: 40px;
+            max-width: 800px; align-self: flex-start;
+        }
+        .citation-header { font-size: 12px; color: #1677ff; margin-bottom: 4px; }
+        .citation-content { font-size: 12px; color: #666; line-height: 1.6;
+            max-height: 80px; overflow: auto; white-space: pre-wrap; word-break: break-word; }
+        .citation-score { font-size: 11px; color: #bbb; margin-top: 4px; }
+
+        /* 回答下方的小字：本次实际使用的检索模式（不起眼但可核对） */
+        .answer-meta { font-size: 11px; color: #bbb; margin: 6px 0 0 40px; line-height: 1.5; }
+
+        /* 反馈 / 复制 / 引用 / 详情：统一操作行，与气泡左边缘对齐 */
+        .feedback-row {
+            display: flex; gap: 6px; margin-top: 8px; margin-left: 40px;
+            flex-wrap: wrap; align-items: center;
+        }
+        .feedback-row .btn-feedback, .feedback-row .citation-btn { margin: 0; }
+        .btn-feedback {
+            padding: 3px 10px; border: 1px solid #d9d9d9; border-radius: 4px;
+            background: #fff; cursor: pointer; font-size: 12px; color: #666;
+        }
+        .btn-feedback:hover { border-color: #1677ff; color: #1677ff; }
+
+        /* 输入区域 */
+        .input-area {
+            padding: 16px 20px; background: #fff; border-top: 1px solid #e8e8e8;
+        }
+        .input-row { display: flex; gap: 8px; }
+        .query-input {
+            flex: 1; padding: 12px 16px; border: 1px solid #d9d9d9; border-radius: 8px;
+            font-size: 14px; outline: none; resize: none; min-height: 44px; max-height: 120px;
+        }
+        .query-input:focus { border-color: #1677ff; }
+        .btn-send {
+            padding: 12px 24px; background: #1677ff; color: #fff; border: none;
+            border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 600;
+        }
+        .btn-send:hover { background: #0958d9; }
+        .btn-send:disabled { background: #d9d9d9; cursor: not-allowed; }
+
+        /* Ch12：模式选择器与打字光标 */
+        #stream-mode {
+            padding: 10px 8px; border: 1px solid #d9d9d9; border-radius: 8px;
+            font-size: 13px; background: #fff; color: #333; flex-shrink: 0;
+        }
+        .stream-cursor {
+            display: inline-block; width: 2px; height: 16px;
+            background: #1677ff; animation: blink 0.8s infinite; vertical-align: text-bottom;
+        }
+        @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
+        .citation-btn {
+            padding: 3px 10px; font-size: 12px;
+            border: 1px solid #91caff; border-radius: 4px; background: #f0f7ff;
+            cursor: pointer; color: #1677ff;
+        }
+        .citation-btn:hover { border-color: #1677ff; background: #e6f4ff; }
+
+        /* 弹窗（引用片段 / 执行详情共用）——缺了这组样式弹窗会变成堆在页尾的静态块 */
+        .modal-overlay {
+            position: fixed; inset: 0; background: rgba(0, 0, 0, 0.35);
+            display: flex; align-items: center; justify-content: center;
+            z-index: 1000; padding: 20px;
+        }
+        .modal-box {
+            background: #fff; border-radius: 10px; width: min(720px, 100%);
+            max-height: 82vh; display: flex; flex-direction: column;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.18); overflow: hidden;
+        }
+        .modal-header {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 14px 18px; border-bottom: 1px solid #f0f0f0; flex-shrink: 0;
+        }
+        .modal-header h3 { font-size: 15px; font-weight: 600; }
+        .modal-close {
+            border: none; background: none; font-size: 22px; line-height: 1;
+            cursor: pointer; color: #999;
+        }
+        .modal-close:hover { color: #333; }
+        .modal-body { padding: 6px 18px 18px; overflow-y: auto; }
+        .modal-citation { border-bottom: 1px solid #f0f0f0; padding: 12px 0; }
+        .modal-citation:last-child { border-bottom: none; }
+        .modal-citation-header { font-weight: 600; font-size: 13px; margin-bottom: 6px; color: #1677ff; }
+        .modal-citation-meta { font-size: 12px; color: #999; margin-bottom: 6px; }
+        .modal-citation-content {
+            font-size: 13px; color: #555; line-height: 1.7;
+            white-space: pre-wrap; word-break: break-word;
+        }
+        .modal-citation-score { font-size: 12px; color: #bbb; margin-top: 6px; }
+
+        /* 未指定知识库时的提示条 */
+        .kb-warning {
+            margin: 12px 20px 0; padding: 10px 14px; border-radius: 6px;
+            background: #fff7e6; border: 1px solid #ffd591; color: #d46b08; font-size: 13px;
+        }
+
+        /* 窄屏：去掉气泡两侧留白，弹窗几乎占满 */
+        @media (max-width: 640px) {
+            .message-user .message-content,
+            .message-assistant .message-content { margin-left: 0; margin-right: 0; }
+            .feedback-row { margin-left: 0; }
+            .modal-overlay { padding: 8px; }
+            .modal-box { max-height: 92vh; }
+        }
+
+        /* 空状态 */
+        .empty-chat { text-align: center; padding: 80px 0; color: #ccc; }
+        .empty-chat p { font-size: 16px; margin-bottom: 8px; }
+        .empty-chat .hint { font-size: 13px; }
+
+        /* 加载状态 */
+        .loading-dots { display: inline-block; }
+        .loading-dots span {
+            display: inline-block; width: 6px; height: 6px; border-radius: 50%;
+            background: #1677ff; margin: 0 2px; animation: bounce 1.4s infinite both;
+        }
+        .loading-dots span:nth-child(2) { animation-delay: 0.2s; }
+        .loading-dots span:nth-child(3) { animation-delay: 0.4s; }
+        @keyframes bounce {
+            0%, 80%, 100% { transform: translateY(0); }
+            40% { transform: translateY(-8px); }
+        }
+
+        /* 重命名输入框（Ch7 新增） */
+        .rename-input {
+            width: 100%; padding: 4px 8px; border: 1px solid #1677ff; border-radius: 4px;
+            font-size: 13px; outline: none;
+        }
+
+        /* 新对话：输入框居中圆角胶囊（Ch7 新增） */
+        .main.centered-input .messages { display: none; }
+        .main.centered-input .input-area {
+            flex: 1; display: flex; align-items: center; justify-content: center;
+            border-top: none; padding: 0 24px;
+        }
+        .main.centered-input .input-row {
+            max-width: 680px; width: 100%; position: relative;
+            background: #fff; border: 1px solid #d9d9d9; border-radius: 28px;
+            padding: 6px 6px 6px 20px; display: flex; align-items: center;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.08); transition: border-color 0.2s, box-shadow 0.2s;
+        }
+        .main.centered-input .input-row:focus-within {
+            border-color: #1677ff; box-shadow: 0 2px 16px rgba(22,119,255,0.15);
+        }
+        .main.centered-input .query-input {
+            border: none; border-radius: 0; padding: 12px 0; font-size: 16px; min-height: 44px;
+            background: transparent;
+        }
+        .main.centered-input .query-input:focus { border-color: transparent; }
+        .main.centered-input .btn-send {
+            border-radius: 22px; padding: 10px 24px; height: 44px; font-size: 15px;
+            white-space: nowrap; flex-shrink: 0;
+        }
+
+        /* 新对话：会话栏待定项 */
+        .session-item.pending { background: #e6f4ff; color: #1677ff; font-weight: 600; font-style: italic; }
+    </style>
+</head>
+<body>
+    <div class="app">
+        <!-- 左侧会话列表 -->
+        <div class="sidebar">
+            <div class="sidebar-header">
+                <h2>对话历史</h2>
+                <button class="btn-back" onclick="newSession()">+ 新对话</button>
+            </div>
+            <div class="session-list" id="session-list"></div>
+        </div>
+
+        <!-- 右侧主区域 -->
+        <div class="main centered-input">
+            <div class="main-header">
+                <h1 id="kb-title">RAG 问答</h1>
+                <div class="header-actions">
+                    <button class="btn-clear" id="clear-msg-btn" onclick="clearMessages()" style="display:none;">清空消息</button>
+                    <button class="btn-back" onclick="gotoObservability()">运行观测</button>
+                    <button class="btn-back" onclick="backToKb()">返回知识库</button>
+                </div>
+            </div>
+
+            <!-- 缺少 kb_id 时给出提示（而不是让用户对着没反应的输入框发呆） -->
+            <div class="kb-warning" id="kb-warning" style="display:none;"></div>
+
+            <div class="messages" id="messages"></div>
+
+            <div class="input-area">
+                <div class="input-row">
+                    <select id="stream-mode" title="选择问答模式">
+                        <option value="sync">同步（等待完整回答）</option>
+                        <option value="sse">SSE 流式</option>
+                        <option value="ws">WebSocket 流式</option>
+                        <option value="http">HTTP 流式</option>
+                    </select>
+                    <textarea class="query-input" id="query-input" placeholder="输入问题，向知识库提问..."
+                              onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendMessage()}"></textarea>
+                    <button class="btn-send" id="send-btn" onclick="sendMessage()">发送</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/ui/http.js"></script>
+    <script>
+        // 知识库与会话的持久化：URL 参数优先，其次读本地存储。
+        // 【为什么需要】从"运行观测"等页面切回来时 URL 上的 ?kb_id= 会丢失，
+        // 若只认 URL，回到问答页就变成"没有知识库 + 空会话"。
+        // kb_id 一律由 URL 显式传递（不落 localStorage）：页面间跳转都带 ?kb_id=，
+        // 谁能进得来、进来是哪个库，看一眼地址栏就知道，排查成本最低。
+        const urlParams = new URLSearchParams(window.location.search);
+        const KB_ID = urlParams.get('kb_id') || '';
+        let currentSessionId = null;
+
+        function setSession(sessionId) {
+            currentSessionId = sessionId || null;
+        }
+
+        // 带 kb_id 的页面地址：观测页与问答页互相跳转时必须带上，否则回来就丢上下文
+        function withKb(url) {
+            return KB_ID ? url + '?kb_id=' + encodeURIComponent(KB_ID) : url;
+        }
+
+        // 运行观测是只读看板，放新标签更顺手（可以边看指标边提问）；
+        // 它不回写任何状态，kb_id 同样走 URL，多一个标签不会带来状态分叉。
+        function gotoObservability() {
+            window.open(withKb('/ui/observability.html'), '_blank');
+        }
+
+        // 返回知识库：同标签跳转，并带上当前 kb_id，落在该知识库的详情页
+        function backToKb() {
+            // 生产习惯：只做同标签跳转，不自动关闭窗口（window.close 受浏览器策略限制、行为不一致）
+            location.href = withKb('/ui/kb.html');
+        }
+
+        function escHTML(str) {
+            const div = document.createElement('div');
+            div.textContent = str;
+            return div.innerHTML;
+        }
+
+        function scrollToBottom() {
+            const container = document.getElementById('messages');
+            container.scrollTop = container.scrollHeight;
+        }
+
+        /* Ch7 新增：控制输入框的显示模式（居中新对话 / 底部消息流） */
+        function setCenteredMode(centered) {
+            const main = document.querySelector('.main');
+            main.classList.toggle('centered-input', centered);
+        }
+
+        /* Ch7 功课：控制"清空消息"按钮显隐 */
+        function setClearBtnVisible(visible) {
+            document.getElementById('clear-msg-btn').style.display = visible ? 'inline-block' : 'none';
+        }
+
+        /* Ch7 功课：清空当前会话消息 */
+        async function clearMessages() {
+            if (!currentSessionId) return;
+            if (!confirm('确定要清空这个对话的所有消息吗？')) return;
+            try {
+                await requestJSON(`/api/chat/sessions/${currentSessionId}/messages`, { method: 'DELETE' });
+            } catch (err) {
+                alert(`清空失败：${err.message}`);
+                return;
+            }
+            document.getElementById('messages').innerHTML = '';
+            setCenteredMode(true);
+            setClearBtnVisible(false);
+        }
+
+        /* Ch7 新增：在侧栏顶部插入待定"新对话"项 */
+        function addPendingSession() {
+            const list = document.getElementById('session-list');
+            const div = document.createElement('div');
+            div.className = 'session-item pending';
+            div.dataset.pending = '1';
+            div.innerHTML = '新对话';
+            list.insertBefore(div, list.firstChild);
+        }
+
+        /* Ch7 新增：重命名会话（内联编辑） */
+        async function loadSessions() {
+            if (!KB_ID) return;
+            const list = document.getElementById('session-list');
+            try {
+                const result = await requestJSON(`/api/chat/sessions?kb_id=${KB_ID}`);
+                list.innerHTML = '';
+
+                if (result.data.items.length === 0) {
+                    list.innerHTML = '<div style="padding:20px;text-align:center;color:#ccc;font-size:13px;">暂无对话</div>';
+                    return;
+                }
+
+                result.data.items.forEach(s => {
+                    const div = document.createElement('div');
+                    div.className = 'session-item' + (s.id === currentSessionId ? ' active' : '');
+                    div.dataset.sessionId = s.id;
+                    div.onclick = (e) => {
+                        if (e.target.closest('.btn-session-action')) return;
+                        loadMessages(s.id);
+                    };
+                    div.innerHTML = `
+                        <div style="overflow:hidden;text-overflow:ellipsis;">${escHTML(s.title)}</div>
+                        <div class="session-time">${escHTML(s.created_at || '')}</div>
+                        <div class="session-actions">
+                            <button class="btn-session-action" title="重命名" onclick="startRename('${s.id}', this)">&#9998;</button>
+                            <button class="btn-session-action btn-delete" title="删除" onclick="deleteSession('${s.id}')">&#10005;</button>
+                        </div>
+                    `;
+                    list.appendChild(div);
+                });
+            } catch (err) {
+                list.innerHTML = `<div style="padding:20px;color:#ff7875;">加载失败：${escHTML(err.message)}</div>`;
+            }
+        }
+
+        /* Ch7 新增：重命名会话（内联编辑） */
+        async function startRename(sessionId, btn) {
+            const item = btn.closest('.session-item');
+            const titleEl = item.querySelector('div:first-child');
+            const oldTitle = titleEl.textContent;
+
+            const input = document.createElement('input');
+            input.className = 'rename-input';
+            input.value = oldTitle;
+            titleEl.replaceWith(input);
+            input.focus();
+            input.select();
+
+            item.querySelector('.session-actions').style.display = 'none';
+
+            let renameDone = false;
+            async function doRename() {
+                if (renameDone) return;
+                renameDone = true;
+                const newTitle = input.value.trim();
+                if (newTitle && newTitle !== oldTitle) {
+                    try {
+                        await requestJSON(`/api/chat/sessions/${sessionId}`, {
+                            method: 'PATCH',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ title: newTitle }),
+                        });
+                    } catch (err) {
+                        alert(`重命名失败：${err.message}`);
+                        loadSessions();
+                        return;
+                    }
+                }
+                loadSessions();
+                if (sessionId === currentSessionId) {
+                    document.getElementById('kb-title').textContent = newTitle || oldTitle;
+                }
+            }
+
+            input.onkeydown = (e) => {
+                if (e.key === 'Enter') { e.preventDefault(); doRename(); }
+                if (e.key === 'Escape') { renameDone = true; loadSessions(); }
+            };
+            input.onblur = () => doRename();
+        }
+
+        /* Ch7 新增：删除会话 */
+        async function deleteSession(sessionId) {
+            if (!confirm('确定要删除这个对话吗？删除后不可恢复。')) return;
+
+            try {
+                await requestJSON(`/api/chat/sessions/${sessionId}`, { method: 'DELETE' });
+            } catch (err) {
+                alert(`删除失败：${err.message}`);
+                return;
+            }
+
+            if (sessionId === currentSessionId) {
+                setSession(null);
+                document.getElementById('messages').innerHTML = '';
+                document.getElementById('kb-title').textContent = 'RAG 问答';
+                setClearBtnVisible(false);
+                setCenteredMode(true);
+            }
+
+            loadSessions();
+        }
+
+        async function newSession() {
+            setSession(null);
+            setClearBtnVisible(false);
+            document.getElementById('messages').innerHTML = '';
+            document.getElementById('kb-title').textContent = 'RAG 问答';
+            setCenteredMode(true);
+            document.getElementById('query-input').focus();
+            addPendingSession();  // 侧栏立即出现待定项，避免体验断层
+            loadSessions();
+        }
+
+        async function loadMessages(sessionId) {
+            setSession(sessionId);
+            loadSessions();
+            let result;
+            try {
+                result = await requestJSON(`/api/chat/sessions/${sessionId}/messages`);
+            } catch (err) {
+                document.getElementById('messages').innerHTML = `
+                    <div class="empty-chat"><p>加载对话失败</p>
+                    <p class="hint">${escHTML(err.message)}</p></div>`;
+                setCenteredMode(true);
+                return;
+            }
+            const messages = result.data.items;
+            const session = result.data.session;
+
+            if (session) {
+                document.getElementById('kb-title').textContent = session.title || 'RAG 问答';
+                setClearBtnVisible(true);
+            }
+            const container = document.getElementById('messages');
+            container.innerHTML = '';
+            if (messages.length === 0) {
+                setCenteredMode(true);
+                return;
+            }
+
+            setCenteredMode(false);
+            messages.forEach(msg => appendMessage(msg.role, msg.content, msg.citations));
+            scrollToBottom();
+        }
+
+        async function sendMessage() {
+            const input = document.getElementById('query-input');
+            const question = input.value.trim();
+            if (!question) return;
+
+            // Ch7：发送首条消息后输入框立即移至底部
+            setCenteredMode(false);
+            document.querySelectorAll('.session-item.pending').forEach(el => el.remove());
+
+            const btn = document.getElementById('send-btn');
+            btn.disabled = true;
+            input.value = '';
+
+            // 显示用户消息
+            appendMessage('user', question);
+            scrollToBottom();
+
+            try {
+                const mode = document.getElementById('stream-mode').value;
+                if (mode === 'sse') {
+                    await sendSSE(question);
+                } else if (mode === 'ws') {
+                    await sendWS(question);
+                } else if (mode === 'http') {
+                    await sendHTTP(question);
+                } else {
+                    await sendSync(question);
+                }
+            } catch (err) {
+                appendMessage('assistant', `请求失败: ${err.message}`);
+                scrollToBottom();
+            }
+            btn.disabled = false;
+            input.focus();
+        }
+
+        // ── 同步模式（原有逻辑）──────────────────────────
+        async function sendSync(question) {
+            const loadingDiv = document.createElement('div');
+            loadingDiv.className = 'message message-assistant';
+            loadingDiv.id = 'loading-msg';
+            loadingDiv.innerHTML = `
+                <div class="message-role">助手</div>
+                <div class="message-content"><span class="loading-dots"><span></span><span></span><span></span></span></div>`;
+            document.getElementById('messages').appendChild(loadingDiv);
+            scrollToBottom();
+
+            const result = await requestJSON('/api/qa/query', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ question: question, kb_id: KB_ID, session_id: currentSessionId }),
+            });
+            const data = result.data;
+
+            const loadEl = document.getElementById('loading-msg');
+            if (loadEl) loadEl.remove();
+            appendMessage('assistant', data.answer, data.citations, data.answer_id,
+                          data.strategy_snapshot, data.trace_id);
+            setSession(data.session_id);
+            loadSessions();
+            scrollToBottom();
+        }
+
+        // ── 流式辅助函数（Ch12 新增）────────────────────
+        function createStreamingBubble() {
+            const container = document.getElementById('messages');
+            const emptyEl = document.getElementById('empty-chat');
+            if (emptyEl) emptyEl.remove();
+
+            const div = document.createElement('div');
+            div.className = 'message message-assistant';
+            div.innerHTML = '<div class="message-role">助手</div>'
+                + '<div class="message-content">'
+                + '  <span class="stream-text"></span><span class="stream-cursor"></span>'
+                + '</div>';
+            div._citations = [];  // 流式期间存储引用，done 后渲染按钮
+            div._traceId = null;  // 第 4 期：本次问答的追踪编号（执行详情入口）
+            container.appendChild(div);
+            scrollToBottom();
+            return div;
+        }
+
+        function appendStreamToken(bubble, token) {
+            const textEl = bubble.querySelector('.stream-text');
+            textEl.textContent += token;
+            scrollToBottom();
+        }
+
+        function appendStreamCitations(bubble, citations, traceId, strategy) {
+            bubble._citations = citations || [];
+            if (traceId) bubble._traceId = traceId;
+            if (strategy) bubble._strategy = strategy;
+        }
+
+        function finalizeBubble(bubble, sessionId) {
+            if (bubble._finalized) return;
+            bubble._finalized = true;
+            const cursor = bubble.querySelector('.stream-cursor');
+            if (cursor) cursor.remove();
+            if (sessionId) setSession(sessionId);
+
+            // 回答下方的小字：说明这条回答用的是基础模式还是高级模式
+            if (bubble._strategy) {
+                const meta = document.createElement('div');
+                meta.className = 'answer-meta';
+                meta.textContent = modeSummary(bubble._strategy);
+                bubble.appendChild(meta);
+            }
+
+            // done 后渲染操作行：引用 + 执行详情（与历史消息保持同一视觉结构）
+            const hasCitations = bubble._citations && bubble._citations.length > 0;
+            if (hasCitations || bubble._traceId) {
+                const row = document.createElement('div');
+                row.className = 'feedback-row';
+
+                if (hasCitations) {
+                    const btn = document.createElement('button');
+                    btn.className = 'citation-btn';
+                    btn.textContent = '查看引用 (' + bubble._citations.length + ')';
+                    const cits = bubble._citations;
+                    btn.onclick = function() { showCitationModal(cits); };
+                    row.appendChild(btn);
+                }
+
+                // 第 4 期：执行详情入口（阶段、耗时、改写/扩展/HyDE、候选与降级）
+                if (bubble._traceId) {
+                    const traceBtn = document.createElement('button');
+                    traceBtn.className = 'citation-btn';
+                    traceBtn.textContent = '执行详情';
+                    const traceId = bubble._traceId;
+                    traceBtn.onclick = function() { showTraceModal(traceId); };
+                    row.appendChild(traceBtn);
+                }
+                bubble.appendChild(row);
+            }
+
+            loadSessions();
+            scrollToBottom();
+        }
+
+        // ── 方案 C：HTTP Chunked (NDJSON) ────────────────
+        async function sendHTTP(question) {
+            const bubble = createStreamingBubble();
+            let ended = false;
+            try {
+                const res = await fetch('/api/qa/stream/http', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ kb_id: KB_ID, question: question, session_id: currentSessionId || undefined }),
+                });
+                if (!res.ok) throw new Error('HTTP ' + res.status + ': ' + await res.text());
+
+                const reader = res.body.getReader();
+                const decoder = new TextDecoder();
+                let buffer = '';
+
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+                    buffer += decoder.decode(value, { stream: true });
+
+                    const lines = buffer.split('\n');
+                    buffer = lines.pop();  // 保留不完整的行
+
+                    for (const line of lines) {
+                        if (!line.trim()) continue;
+                        try {
+                            const msg = JSON.parse(line);
+                            if (msg.event === 'citations') appendStreamCitations(bubble, msg.data.citations, msg.data.trace_id, msg.data.strategy_snapshot);
+                            else if (msg.event === 'token') appendStreamToken(bubble, msg.data.content);
+                            else if (msg.event === 'done') {
+                                ended = true;
+                                if (msg.data.trace_id) bubble._traceId = msg.data.trace_id;
+                                finalizeBubble(bubble, msg.data.session_id);
+                            }
+                            else if (msg.event === 'error') { ended = true; appendStreamToken(bubble, '错误: ' + msg.data.message); finalizeBubble(bubble); }
+                        } catch (e) { throw new Error('流事件解析失败: ' + e.message); }
+                    }
+                }
+                if (!ended) throw new Error('连接已结束，但未收到完成事件');
+            } catch (e) {
+                appendStreamToken(bubble, '请求失败: ' + e.message);
+            } finally {
+                finalizeBubble(bubble);
+            }
+        }
+
+        // ── 方案 A：SSE ─────────────────────────────────
+        async function sendSSE(question) {
+            const bubble = createStreamingBubble();
+            let ended = false;
+            try {
+                const res = await fetch('/api/qa/stream/sse', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ kb_id: KB_ID, question: question, session_id: currentSessionId || undefined }),
+                });
+                if (!res.ok) throw new Error('HTTP ' + res.status + ': ' + await res.text());
+
+                const reader = res.body.getReader();
+                const decoder = new TextDecoder();
+                let buffer = '';
+
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+                    buffer += decoder.decode(value, { stream: true });
+
+                    // sse-starlette 默认用 \r\n 作为行分隔符，统一替换为 \n
+                    buffer = buffer.replace(/\r\n/g, '\n');
+
+                    // SSE 格式：以 \n\n 分隔事件
+                    const parts = buffer.split('\n\n');
+                    buffer = parts.pop();
+
+                    for (const part of parts) {
+                        if (!part.trim()) continue;
+                        let eventType = '', dataStr = '';
+                        for (const line of part.split('\n')) {
+                            if (line.startsWith(':')) continue;  // 跳过 SSE 注释行（ping 等）
+                            if (line.startsWith('event: ')) eventType = line.slice(7);
+                            else if (line.startsWith('data: ')) dataStr = line.slice(6);
+                        }
+                        if (!dataStr) continue;
+                        try {
+                            const data = JSON.parse(dataStr);
+                            if (eventType === 'citations') appendStreamCitations(bubble, data.citations, data.trace_id, data.strategy_snapshot);
+                            else if (eventType === 'token') appendStreamToken(bubble, data.content);
+                            else if (eventType === 'done') { ended = true; finalizeBubble(bubble, data.session_id); }
+                            else if (eventType === 'error') { ended = true; appendStreamToken(bubble, '错误: ' + data.message); finalizeBubble(bubble); }
+                        } catch (e) { throw new Error('流事件解析失败: ' + e.message); }
+                    }
+                }
+                if (!ended) throw new Error('连接已结束，但未收到完成事件');
+            } catch (e) {
+                appendStreamToken(bubble, '请求失败: ' + e.message);
+            } finally {
+                finalizeBubble(bubble);
+            }
+        }
+
+        // ── 方案 B：WebSocket ───────────────────────────
+        function sendWS(question) {
+            return new Promise(function(resolve, reject) {
+                const bubble = createStreamingBubble();
+                const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+                const ws = new WebSocket(protocol + '//' + location.host + '/api/qa/stream/ws');
+                let resolved = false;
+
+                function doneResolve() {
+                    if (!resolved) { resolved = true; resolve(); }
+                }
+
+                ws.onopen = function() {
+                    // 发送问题（自动同源携带认证 Cookie）
+                    ws.send(JSON.stringify({
+                        question: question,
+                        kb_id: KB_ID,
+                        session_id: currentSessionId || undefined,
+                    }));
+                };
+
+                ws.onmessage = function(event) {
+                    try {
+                        const msg = JSON.parse(event.data);
+                        if (msg.event === 'citations') appendStreamCitations(bubble, msg.data.citations, msg.data.trace_id, msg.data.strategy_snapshot);
+                        else if (msg.event === 'token') appendStreamToken(bubble, msg.data.content);
+                        else if (msg.event === 'done') {
+                            if (msg.data.trace_id) bubble._traceId = msg.data.trace_id;
+                            finalizeBubble(bubble, msg.data.session_id);
+                            ws.close();
+                            doneResolve();
+                        } else if (msg.event === 'error') {
+                            appendStreamToken(bubble, '错误: ' + msg.data.message);
+                            finalizeBubble(bubble);
+                            ws.close();
+                            doneResolve();
+                        }
+                    } catch (e) {
+                        appendStreamToken(bubble, '错误: 无法解析流式响应');
+                        finalizeBubble(bubble);
+                        ws.close();
+                        doneResolve();
+                    }
+                };
+
+                ws.onclose = function(event) {
+                    if (!resolved) {
+                        // 协议成功由 done 事件确认，连接正常关闭不等于回答完成
+                        if (event.code === 1006) {
+                            appendStreamToken(bubble, 'WebSocket 连接异常关闭（服务器未响应）');
+                        } else if (event.code !== 1000) {
+                            appendStreamToken(bubble, 'WebSocket 连接关闭 (code: ' + event.code + ')');
+                        } else {
+                            appendStreamToken(bubble, '错误: 流已关闭但未收到结束事件');
+                        }
+                        finalizeBubble(bubble);
+                        doneResolve();
+                    }
+                };
+
+                ws.onerror = function() {
+                    // onerror 后会触发 onclose，在 onclose 中统一处理
+                };
+            });
+        }
+
+        // 把"本次生效的策略快照"压成一行小字（与 kb.html 的策略摘要同一口径）
+        function modeSummary(snapshot) {
+            const cfg = snapshot || {};
+            const fusion = cfg.fusion_method || 'rrf';
+            const topN = (cfg.rerank_top_n != null) ? cfg.rerank_top_n
+                       : (cfg.top_k != null ? cfg.top_k : '-');
+            if (cfg.mode !== 'advanced') {
+                return '基础模式 · 融合 ' + fusion + ' · 保留 ' + topN + ' 条';
+            }
+            const features = [];
+            if (cfg.enable_rewrite) features.push('问题改写');
+            if (cfg.enable_multi_query) features.push('多查询×' + (cfg.multi_query_count || 1));
+            if (cfg.enable_hyde) features.push('HyDE');
+            return '高级模式 · 融合 ' + fusion
+                + ' · 能力 ' + (features.length ? features.join('+') : '未启用')
+                + ' · 保留 ' + topN + ' 条';
+        }
+
+        function appendMessage(role, content, citations, answerId, strategy, traceId) {
+            const container = document.getElementById('messages');
+
+            const div = document.createElement('div');
+            div.className = `message message-${role}`;
+            div.innerHTML = `
+                <div class="message-role">${role === 'user' ? '你' : '助手'}</div>
+                <div class="message-content">${escHTML(content)}</div>
+            `;
+            container.appendChild(div);
+
+            if (role !== 'assistant') return;
+
+            // 回答下方的小字：说明这条回答用的是基础模式还是高级模式
+            if (strategy) {
+                const meta = document.createElement('div');
+                meta.className = 'answer-meta';
+                meta.textContent = modeSummary(strategy);
+                div.appendChild(meta);
+            }
+
+            // 操作行：引用 / 复制 / 反馈统一放在一行，并挂在消息气泡内部（保证与气泡左对齐）
+            const row = document.createElement('div');
+            row.className = 'feedback-row';
+            row.setAttribute('data-raw', div.querySelector('.message-content').innerHTML);
+
+            // Ch12：引用改为弹框模式——已知引用渲染按钮，点击弹框查看全部片段
+            if (citations && citations.length > 0) {
+                const cbtn = document.createElement('button');
+                cbtn.className = 'citation-btn';
+                cbtn.textContent = '查看引用 (' + citations.length + ')';
+                cbtn.onclick = function() { showCitationModal(citations); };
+                row.appendChild(cbtn);
+            }
+
+            const copyBtn = document.createElement('button');
+            copyBtn.className = 'btn-feedback';
+            copyBtn.textContent = '复制回答';
+            copyBtn.onclick = function() { copyAnswer(copyBtn); };
+            row.appendChild(copyBtn);
+
+            // 第 4 期：执行详情入口。
+            // 【易错】同步模式的响应里也带 trace_id，之前只在流式路径（finalizeBubble）渲染了按钮，
+            // 导致默认的"同步"模式看不到执行详情，已验证并修复。
+            if (traceId) {
+                const traceBtn = document.createElement('button');
+                traceBtn.className = 'citation-btn';
+                traceBtn.textContent = '执行详情';
+                traceBtn.onclick = function() { showTraceModal(traceId); };
+                row.appendChild(traceBtn);
+            }
+
+            // 仅新回答有 answerId
+            if (answerId) {
+                [['有用', 1], ['一般', 3], ['很有用', 5]].forEach(function(pair) {
+                    const fb = document.createElement('button');
+                    fb.className = 'btn-feedback';
+                    fb.textContent = pair[0];
+                    fb.onclick = function() { submitFeedback(answerId, pair[1]); };
+                    row.appendChild(fb);
+                });
+            }
+            div.appendChild(row);
+        }
+
+        // Ch12：引用弹框——统一渲染全部引用片段（父子分块时展示"文档 + 父块 + 命中子块"定位）
+        function showCitationModal(citations) {
+            const old = document.querySelector('.modal-overlay');
+            if (old) old.remove();
+
+            const overlay = document.createElement('div');
+            overlay.className = 'modal-overlay';
+            overlay.onclick = function(e) { if (e.target === overlay) overlay.remove(); };
+
+            const box = document.createElement('div');
+            box.className = 'modal-box';
+            box.onclick = function(e) { e.stopPropagation(); };
+
+            const header = document.createElement('div');
+            header.className = 'modal-header';
+            const title = document.createElement('h3');
+            title.textContent = '引用片段 (' + citations.length + ')';
+            const closeBtn = document.createElement('button');
+            closeBtn.className = 'modal-close';
+            closeBtn.innerHTML = '&times;';
+            closeBtn.onclick = function() { overlay.remove(); };
+            header.appendChild(title);
+            header.appendChild(closeBtn);
+
+            const body = document.createElement('div');
+            body.className = 'modal-body';
+
+            citations.forEach(function(c, idx) {
+                const card = document.createElement('div');
+                card.className = 'modal-citation';
+
+                const location = (c.parent_chunk_id != null)
+                    ? '父块 #' + (c.parent_index != null ? c.parent_index : '-')
+                      + '（命中子块 #' + (c.child_sense_index != null ? c.child_sense_index : '-') + '）'
+                    : '块 #' + (c.chunk_index != null ? c.chunk_index : '-');
+                const meta = '文档：' + (c.source || '-') + '　·　' + location
+                    + (c.hit_child_count > 1 ? '　·　该父块命中 ' + c.hit_child_count + ' 个子块（已去重合并）' : '');
+
+                const head = document.createElement('div');
+                head.className = 'modal-citation-header';
+                head.textContent = '引用 ' + (idx + 1);
+                const metaEl = document.createElement('div');
+                metaEl.className = 'modal-citation-meta';
+                metaEl.textContent = meta;
+
+                card.appendChild(head);
+                card.appendChild(metaEl);
+
+                // 父子分块：先给"命中的子块"（精确定位片段），再给所属父块（生成用上下文），
+                // 这样引用能同时定位到 文档 + 父块 + 命中的子块
+                if (c.parent_chunk_id != null && c.child_content) {
+                    const childTitle = document.createElement('div');
+                    childTitle.className = 'modal-citation-meta';
+                    childTitle.textContent = '命中子块 #' + (c.child_sense_index != null ? c.child_sense_index : '-')
+                        + '（检索单元，向量库里存的就是它）';
+                    const childBody = document.createElement('div');
+                    childBody.className = 'modal-citation-content';
+                    childBody.style.cssText = 'border-left:3px solid #91caff;background:#f7fbff;padding:6px 10px;border-radius:0 4px 4px 0;margin-bottom:6px;';
+                    childBody.textContent = String(c.child_content);
+                    const parentTitle = document.createElement('div');
+                    parentTitle.className = 'modal-citation-meta';
+                    parentTitle.textContent = '所属父块 #' + (c.parent_index != null ? c.parent_index : '-')
+                        + '（生成回答时提供给大模型）';
+                    card.appendChild(childTitle);
+                    card.appendChild(childBody);
+                    card.appendChild(parentTitle);
+                }
+
+                const text = String(c.content || '');
+                const LIMIT = 300;
+                const preview = text.length > LIMIT ? escHTML(text.slice(0, LIMIT)) + '……' : escHTML(text);
+                const contentEl = document.createElement('div');
+                contentEl.className = 'modal-citation-content';
+                contentEl.innerHTML = preview;
+                card.appendChild(contentEl);   // head / metaEl 已在前面追加，这里只接正文
+
+                // 长片段默认折叠，避免一屏看不完
+                if (text.length > LIMIT) {
+                    const more = document.createElement('div');
+                    more.className = 'cite-more';
+                    more.textContent = '展开全文（共 ' + text.length + ' 字）';
+                    more.onclick = function() {
+                        const expanded = !more._expanded;
+                        more._expanded = expanded;
+                        contentEl.innerHTML = expanded ? escHTML(text) : preview;
+                        more.textContent = expanded ? '收起' : '展开全文（共 ' + text.length + ' 字）';
+                    };
+                    card.appendChild(more);
+                }
+
+                const score = document.createElement('div');
+                score.className = 'modal-citation-score';
+                score.textContent = '最终分数: ' + (c.final_score != null ? Number(c.final_score).toFixed(4) : '-')
+                    + (c.rerank_score != null ? '　Rerank: ' + Number(c.rerank_score).toFixed(4) : '')
+                    + (c.hit_paths && c.hit_paths.length ? '　命中路径: ' + c.hit_paths.join(', ') : '');
+                card.appendChild(score);
+
+                body.appendChild(card);
+            });
+
+            box.appendChild(header);
+            box.appendChild(body);
+            overlay.appendChild(box);
+            document.body.appendChild(overlay);
+        }
+
+        // 第 4 期：执行详情——单次问答的完整链路（阶段、耗时、改写/扩展/HyDE、候选、降级）
+        async function showTraceModal(traceId) {
+            const old = document.querySelector('.modal-overlay');
+            if (old) old.remove();
+
+            const overlay = document.createElement('div');
+            overlay.className = 'modal-overlay';
+            overlay.onclick = function(e) { if (e.target === overlay) overlay.remove(); };
+            overlay.innerHTML = '<div class="modal-box">'
+                + '<div class="modal-header"><h3>执行详情</h3>'
+                + '<button class="modal-close" onclick="this.closest(\'.modal-overlay\').remove()">&times;</button></div>'
+                + '<div class="modal-body"><p>加载中...</p></div>'
+                + '</div>';
+            document.body.appendChild(overlay);
+
+            const body = overlay.querySelector('.modal-body');
+            try {
+                // 【易错】本页面没有 API 常量（其余请求都用字面量路径），别写成 API + '/...'
+                const resp = await fetch('/api/observability/traces/' + encodeURIComponent(traceId));
+                if (!resp.ok) throw new Error('读取执行详情失败');
+                const trace = (await resp.json()).data;
+                body.innerHTML = renderTraceDetail(trace);
+            } catch (err) {
+                body.innerHTML = '<p style="color:#c00;">' + escHTML(err.message) + '</p>';
+            }
+        }
+
+        function renderTraceDetail(trace) {
+            const ms = function(v) { return (v === null || v === undefined) ? '-' : v + ' ms'; };
+            const meta = 'font-size:13px;color:#555;margin:4px 0;';
+            let html = '';
+            html += '<div style="' + meta + '"><b>追踪编号</b>：' + escHTML(trace.trace_id)
+                 + '　<b>状态</b>：' + escHTML(trace.status)
+                 + '　<b>总耗时</b>：' + ms(trace.total_ms)
+                 + '　<b>首 Token</b>：' + ms(trace.first_token_ms) + '</div>';
+            html += '<div style="' + meta + '"><b>原始问题</b>：' + escHTML(trace.question) + '</div>';
+            if (trace.rewritten_question) {
+                html += '<div style="' + meta + '"><b>改写后问题</b>：' + escHTML(trace.rewritten_question) + '</div>';
+            }
+            if (trace.expansions && trace.expansions.length) {
+                html += '<div style="' + meta + '"><b>扩展问题</b>：' + trace.expansions.map(escHTML).join(' ｜ ') + '</div>';
+            }
+            if (trace.hyde_answer) {
+                html += '<div style="' + meta + '"><b>假设答案（仅用于检索）</b>：' + escHTML(trace.hyde_answer) + '</div>';
+            }
+
+            html += '<h4 style="margin:12px 0 6px;">阶段耗时</h4>'
+                 + '<table style="width:100%;border-collapse:collapse;font-size:13px;">'
+                 + '<tr style="background:#fafafa;"><th style="text-align:left;padding:4px;">阶段</th>'
+                 + '<th style="text-align:left;padding:4px;">耗时</th><th style="text-align:left;padding:4px;">状态</th>'
+                 + '<th style="text-align:left;padding:4px;">入/出</th><th style="text-align:left;padding:4px;">说明</th></tr>';
+            (trace.spans || []).forEach(function(span) {
+                const detailText = span.error
+                    ? span.error
+                    : (span.detail && Object.keys(span.detail).length ? JSON.stringify(span.detail) : '');
+                const color = span.status === 'failed' ? '#c00' : (span.status === 'degraded' ? '#d46b08' : '#555');
+                html += '<tr style="border-top:1px solid #f0f0f0;">'
+                     + '<td style="padding:4px;">' + escHTML(span.stage) + '</td>'
+                     + '<td style="padding:4px;">' + ms(span.duration_ms) + '</td>'
+                     + '<td style="padding:4px;color:' + color + ';">' + escHTML(span.status) + '</td>'
+                     + '<td style="padding:4px;">' + (span.input_count === null ? '-' : span.input_count)
+                     + ' / ' + (span.output_count === null ? '-' : span.output_count) + '</td>'
+                     + '<td style="padding:4px;font-size:12px;color:#888;word-break:break-all;">' + escHTML(detailText) + '</td></tr>';
+            });
+            html += '</table>';
+
+            // 第 4 期：检索过程摘要（各路径命中数 / 融合前后候选 / Rerank 顺序变化 / 是否无召回）
+            const traceDetail = trace.detail || {};
+            const procLines = [];
+            if (traceDetail.path_hits && Object.keys(traceDetail.path_hits).length) {
+                procLines.push('<b>各检索路径命中</b>：' + Object.keys(traceDetail.path_hits)
+                    .map(function(key) { return escHTML(key) + '=' + traceDetail.path_hits[key]; }).join('，'));
+            } else if (traceDetail.retrieval_hits !== undefined) {
+                procLines.push('<b>检索命中</b>：' + traceDetail.retrieval_hits + ' 条（基础模式）');
+            }
+            if (traceDetail.after_merge !== undefined) {
+                procLines.push('<b>合并去重后</b>：' + traceDetail.after_merge + ' 条 → '
+                    + '<b>过滤/截断后进入上下文</b>：' + traceDetail.after_filter + ' 条');
+            }
+            const rerankSpans = (trace.spans || []).filter(function(s) { return s.stage === 'Rerank'; });
+            const rerankSpan = rerankSpans.length ? rerankSpans[rerankSpans.length - 1] : null;
+            if (rerankSpan) {
+                const rd = rerankSpan.detail || {};
+                procLines.push('<b>Rerank</b>：'
+                    + (rerankSpan.status === 'degraded' ? '已降级（' + escHTML(rd.fallback || '') + '）' : '生效')
+                    + '，耗时 ' + ms(rerankSpan.duration_ms)
+                    + (rd.order_changed === undefined ? '' : '，前 10 名顺序变化：' + (rd.order_changed ? '是' : '否')));
+            }
+            if (trace.recall_empty) {
+                procLines.push('<span style="color:#d46b08;">本次无召回结果</span>');
+            }
+            if (procLines.length) {
+                html += '<h4 style="margin:12px 0 6px;">检索过程</h4>'
+                     + '<div style="font-size:13px;color:#555;line-height:1.8;">'
+                     + procLines.join('<br>') + '</div>';
+            }
+
+            const degradations = (trace.detail && trace.detail.degradations) || [];
+            if (degradations.length) {
+                html += '<h4 style="margin:12px 0 6px;">降级记录</h4><ul style="font-size:13px;color:#d46b08;">';
+                degradations.forEach(function(item) {
+                    html += '<li>' + escHTML(item.stage) + '：' + escHTML(item.reason)
+                         + ' → ' + escHTML(item.fallback) + '</li>';
+                });
+                html += '</ul>';
+            }
+
+            const items = (trace.detail && trace.detail.top_items) || [];
+            if (items.length) {
+                html += '<h4 style="margin:12px 0 6px;">最终上下文候选</h4>';
+                items.forEach(function(item, idx) {
+                    const parentInfo = (item.parent_index !== null && item.parent_index >= 0)
+                        ? '（父块 #' + item.parent_index + '，命中子块 #' + item.sense_index + '）' : '';
+                    html += '<div style="border-left:2px solid #e6f4ff;padding:4px 8px;margin-bottom:6px;">'
+                         + '<div style="font-size:13px;">' + (idx + 1) + '. ' + escHTML(item.source || '')
+                         + ' #' + item.chunk_index + parentInfo
+                         + '　最终分 ' + item.final_score
+                         + (item.rerank_score === null || item.rerank_score === undefined ? '' : '　Rerank ' + item.rerank_score)
+                         + (item.hit_paths ? '　路径 ' + escHTML(item.hit_paths.join(', ')) : '') + '</div>'
+                         + '<div style="font-size:12px;color:#888;">' + escHTML(item.content_preview) + '</div></div>';
+                });
+            }
+
+            html += '<div style="font-size:12px;color:#aaa;margin-top:10px;word-break:break-all;">配置快照：'
+                 + escHTML(JSON.stringify(trace.config_snapshot || {})) + '</div>';
+            return html;
+        }
+
+        async function copyAnswer(btn) {
+            // 从所在行的 data-raw 取回原始 HTML，转为纯文本复制
+            const row = btn.closest('.feedback-row');
+            const raw = row.getAttribute('data-raw') || '';
+            const temp = document.createElement('div');
+            temp.innerHTML = raw;
+            const text = temp.textContent;
+            try {
+                await navigator.clipboard.writeText(text);
+                btn.textContent = '已复制';
+            } catch (err) {
+                // 兼容非 HTTPS / 旧浏览器：用临时 textarea 复制
+                const ta = document.createElement('textarea');
+                ta.value = text;
+                document.body.appendChild(ta);
+                ta.select();
+                document.execCommand('copy');
+                document.body.removeChild(ta);
+                btn.textContent = '已复制';
+            }
+            setTimeout(() => { btn.textContent = '复制回答'; }, 1500);
+        }
+
+        async function submitFeedback(answerId, score) {
+            try {
+                await requestJSON('/api/qa/feedback', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ answer_id: answerId, score: score }),
+                });
+                document.querySelectorAll('.feedback-row').forEach(row => {
+                    if (row.innerHTML.includes(answerId)) {
+                        row.innerHTML = '<span style="font-size:12px;color:#52c41a;">感谢反馈！</span>';
+                    }
+                });
+            } catch (err) {
+                alert(`反馈提交失败：${err.message}`);
+            }
+        }
+
+        // Ch9 新增：先检查登录状态，未登录则跳转到知识库管理页（登录页）
+        (async function () {
+            try {
+                const resp = await fetch('/api/auth/me', { credentials: 'same-origin' });
+                if (!resp.ok) {
+                    location.href = '/ui/kb.html';
+                    return;
+                }
+            } catch (e) {
+                location.href = '/ui/kb.html';
+                return;
+            }
+
+            // 没有知识库（例如直接敲地址进来）：提示来源并禁用输入，避免"问了没反应"
+            if (!KB_ID) {
+                const warn = document.getElementById('kb-warning');
+                warn.style.display = 'block';
+                warn.innerHTML = '当前未指定知识库：请先到 <a href="/ui/kb.html">知识库管理</a> '
+                    + '选择知识库后点「RAG 问答」进入。';
+                document.getElementById('send-btn').disabled = true;
+                document.getElementById('query-input').disabled = true;
+                newSession();
+                return;
+            }
+
+            // 恢复"最近一次对话"：会话数据在服务端（按知识库查询），页面间来回切换时对话不丢，
+            // 不依赖浏览器本地存储，也就不会出现"恢复了别的知识库的会话"这类脏状态
+            try {
+                const list = await requestJSON(`/api/chat/sessions?kb_id=${encodeURIComponent(KB_ID)}`);
+                const latest = (list.data.items || [])[0];
+                if (latest) {
+                    await loadMessages(latest.id);
+                    return;
+                }
+            } catch (err) {
+                // 拉不到会话列表 → 直接开新会话
+            }
+            newSession();
+        })();
+    </script>
+</body>
+</html>

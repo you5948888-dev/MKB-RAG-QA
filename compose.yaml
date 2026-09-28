@@ -1,0 +1,94 @@
+# Compose 项目名。
+name: rag-tutorial
+
+services:
+  # Web 服务负责接收浏览器和 API 请求。
+  web:
+    # IMAGE_TAG 来自 .env.compose，默认使用 0.14.0。
+    image: "rag-tutorial:${IMAGE_TAG:-0.14.0}"
+    # 构建上下文是 compose.yaml 所在的当前目录。
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: runtime
+    # 把外部服务地址、模型配置和密钥注入 Web。
+    env_file:
+      - .env.docker
+    # SQLite、上传文件和反馈数据保存在命名卷中。
+    volumes:
+      - app_data:/app/data
+    # 让 Linux 容器可以通过该域名访问宿主机服务。
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    # 宿主机端口可配置，容器内端口固定为 8013。
+    ports:
+      - "${HOST_PORT:-8013}:8013"
+    # Redis 健康后再启动 Web。
+    depends_on:
+      redis:
+        condition: service_healthy
+    # 访问 /docs，确认 FastAPI 已能响应 HTTP 请求。
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8013/docs', timeout=3)"
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  # Worker 复用 Web 构建出的同名镜像，不再重复定义 build。
+  worker:
+    image: "rag-tutorial:${IMAGE_TAG:-0.14.0}"
+    # Worker 与 Web 使用同一份应用配置。
+    env_file:
+      - .env.docker
+    # 两个容器共享同一份 SQLite 和上传文件。
+    volumes:
+      - app_data:/app/data
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    # 覆盖 Dockerfile 的默认 CMD，改为启动 Celery Worker。
+    command:
+      - python
+      - -m
+      - celery
+      - -A
+      - tasks.celery_app
+      - worker
+      - -Q
+      - upload_queue
+      - -l
+      - info
+      - -P
+      - prefork
+      - -c
+      - "2"
+    # Redis 健康后再连接任务队列。
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  # Redis 在 Web 与 Worker 之间传递异步任务。
+  redis:
+    image: redis:7-alpine
+    # 开启 AOF，并把数据写入 redis_data 卷。
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis_data:/data
+    # Redis 仅供 Compose 内部网络访问，不映射宿主机 6379。
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+
+# 容器删除后，命名卷中的数据仍然保留。
+volumes:
+  app_data:
+    name: rag-tutorial-app-data
+  redis_data:
+    name: rag-tutorial-redis-data

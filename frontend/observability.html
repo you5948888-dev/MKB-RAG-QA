@@ -1,0 +1,682 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>运行观测 - RAG 知识库系统</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+            background: #f5f7fa; color: #333; padding: 20px;
+        }
+        .page { max-width: 1180px; margin: 0 auto; }
+        .topbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+        h1 { font-size: 20px; font-weight: 600; }
+        .nav a { color: #1677ff; text-decoration: none; font-size: 14px; margin-left: 14px; }
+        .toolbar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+        .card { background: #fff; border-radius: 8px; padding: 16px; margin-bottom: 16px; box-shadow: 0 1px 3px rgba(0,0,0,.06); }
+        .card h2 { font-size: 15px; font-weight: 600; margin-bottom: 12px; color: #555; }
+        .metrics { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; }
+        .metric { background: #fafcff; border: 1px solid #eef3f9; border-radius: 6px; padding: 10px 12px; }
+        .metric .label { font-size: 12px; color: #888; }
+        .metric .value { font-size: 20px; font-weight: 600; margin-top: 4px; color: #1677ff; }
+        .metric .value.warn { color: #d46b08; }
+        .metric .value.bad { color: #cf1322; }
+        table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        th, td { text-align: left; padding: 7px 6px; border-bottom: 1px solid #f0f0f0; }
+        th { color: #888; font-weight: 500; background: #fafafa; }
+        .tag { display: inline-block; padding: 1px 7px; border-radius: 10px; font-size: 12px; }
+        .tag-ok { background: #f6ffed; color: #389e0d; border: 1px solid #b7eb8f; }
+        .tag-failed { background: #fff1f0; color: #cf1322; border: 1px solid #ffa39e; }
+        .tag-running { background: #f0f5ff; color: #1677ff; border: 1px solid #adc6ff; }
+        .tag-degraded { background: #fff7e6; color: #d46b08; border: 1px solid #ffd591; }
+        button { padding: 5px 12px; border-radius: 6px; border: 1px solid #d9d9d9; background: #fff; cursor: pointer; font-size: 13px; }
+        button.primary { background: #1677ff; color: #fff; border-color: #1677ff; }
+        button.danger { color: #cf1322; border-color: #ffa39e; }
+        .muted { color: #999; font-size: 12px; }
+        .muted.warn { color: #d46b08; }
+        .muted.ok { color: #389e0d; }
+        .error-text { color: #cf1322; font-size: 12px; word-break: break-all; }
+        .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.35); display: flex; align-items: center; justify-content: center; z-index: 50; }
+        .modal-box { background: #fff; border-radius: 8px; width: min(860px, 92vw); max-height: 86vh; display: flex; flex-direction: column; }
+        .modal-header { display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; border-bottom: 1px solid #f0f0f0; }
+        .modal-body { padding: 14px 16px; overflow-y: auto; }
+        .modal-close { border: none; background: none; font-size: 20px; cursor: pointer; color: #999; }
+    </style>
+</head>
+<body>
+<div class="page">
+    <div class="topbar">
+        <h1>运行观测</h1>
+        <div class="nav">
+            <a href="/ui/kb.html" id="nav-kb">知识库管理</a>
+            <a href="/ui/index.html" id="nav-qa">问答</a>
+            <a href="/docs" target="_blank">API 文档</a>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="toolbar">
+            <label class="muted">时间窗口</label>
+            <select id="hours">
+                <option value="1">最近 1 小时</option>
+                <option value="24" selected>最近 24 小时</option>
+                <option value="168">最近 7 天</option>
+            </select>
+            <button class="primary" onclick="loadAll()">刷新</button>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2>问答请求</h2>
+        <div class="metrics" id="qa-metrics"></div>
+    </div>
+
+    <div class="card">
+        <h2>能力使用与文档任务</h2>
+        <div class="metrics" id="feature-metrics"></div>
+    </div>
+
+    <div class="card">
+        <h2>外部依赖状态（就绪探测）</h2>
+        <div id="dependencies"></div>
+    </div>
+
+    <div class="card">
+        <h2>LangSmith LLM 追踪（可选）</h2>
+        <div id="langsmith"></div>
+    </div>
+
+    <div class="card">
+        <h2>最近错误</h2>
+        <div id="recent-errors"></div>
+    </div>
+
+    <div class="card">
+        <h2>请求追踪列表</h2>
+        <div class="toolbar" style="margin-bottom:8px;">
+            <label class="muted">时间范围</label>
+            <select id="trace-hours" onchange="resetTracePage()">
+                <option value="">全部</option>
+                <option value="1">最近 1 小时</option>
+                <option value="24" selected>最近 24 小时</option>
+                <option value="168">最近 7 天</option>
+            </select>
+            <select id="biz-type" onchange="resetTracePage()">
+                <option value="">全部类型</option>
+                <option value="qa">问答</option>
+                <option value="upload">文档处理</option>
+                <option value="index_build">索引构建</option>
+            </select>
+            <select id="status-filter" onchange="resetTracePage()">
+                <option value="">全部状态</option>
+                <option value="ok">成功</option>
+                <option value="failed">失败</option>
+                <option value="running">进行中</option>
+            </select>
+            <label class="muted">每页</label>
+            <select id="trace-page-size" onchange="resetTracePage()">
+                <option value="20" selected>20</option>
+                <option value="50">50</option>
+                <option value="100">100</option>
+            </select>
+            <span style="flex:1"></span>
+            <button onclick="loadTraces()">刷新</button>
+        </div>
+        <div class="toolbar" style="margin-bottom:8px;">
+            <span class="muted" id="trace-selected-info">已选 0 条</span>
+            <button id="delete-selected-btn" class="danger" onclick="deleteSelected()" disabled>删除选中</button>
+            <button id="delete-page-btn" class="danger" onclick="deleteCurrentPage()">删除本页</button>
+            <button class="danger" onclick="deleteByRange()">删除当前时间范围内的全部</button>
+            <span class="muted" id="trace-msg"></span>
+        </div>
+        <div id="traces"></div>
+        <div class="toolbar" style="margin-top:10px;">
+            <button id="trace-prev" onclick="changeTracePage(-1)">上一页</button>
+            <span class="muted" id="trace-page-info"></span>
+            <button id="trace-next" onclick="changeTracePage(1)">下一页</button>
+        </div>
+    </div>
+
+    <!-- 数据维护：破坏性操作单独一卡片放最底部，远离"刷新/时间窗口"，避免误点 -->
+    <div class="card" id="maintenance-card">
+        <h2>数据维护（观测数据，仅管理员）</h2>
+        <p class="muted" id="storage-info">加载中...</p>
+
+        <!-- 主操作：一键清空。不需要理解 trace_id、不需要选范围 -->
+        <div class="toolbar" style="margin-top:10px;">
+            <button class="danger" onclick="cleanupAll()">清空全部观测数据</button>
+            <span class="muted">点一下即可；会先告诉你"要删多少条"，确认后才删除</span>
+        </div>
+        <p class="muted" id="cleanup-result" style="margin-top:8px;"></p>
+
+        <!-- 单条删除：在列表里点按钮即可，无需知道 trace_id -->
+        <p class="muted" style="margin-top:6px;">
+            只删某一条？直接在上方「请求追踪列表」里点该行的「<b>删除</b>」按钮——
+            <b>不需要知道也不用输入追踪编号</b>（编号只是给排查用的，列表里已显示缩略值，悬停看完整值）。
+        </p>
+
+        <details style="margin-top:10px;">
+            <summary class="muted" style="cursor:pointer;">高级选项（按时间范围清理 / 按编号清理 / 导出备份）</summary>
+            <div class="toolbar" style="margin-top:10px;">
+                <label class="muted">范围</label>
+                <select id="cleanup-mode" onchange="toggleCleanupMode()">
+                    <option value="older_than" selected>保留最近 N 天，清理更早的</option>
+                    <option value="trace_ids">只清理指定追踪编号（多个用逗号分隔）</option>
+                </select>
+                <input type="number" id="cleanup-days" value="7" min="1" max="365" style="width:80px;">
+                <input type="text" id="cleanup-ids" placeholder="trace_id，多个用逗号分隔"
+                       style="width:300px; display:none;">
+                <span style="flex:1"></span>
+                <button onclick="cleanup(true)">预览将删除</button>
+                <button onclick="cleanup(false)">执行范围内的清理</button>
+                <button onclick="exportTraces()">导出 JSON（备份）</button>
+            </div>
+        </details>
+        <p class="muted" style="margin-top:6px;">
+            观测数据**不会自动清理**，删除后不可恢复（不影响知识库、文档与问答记录）。
+        </p>
+    </div>
+</div>
+
+<script>
+    const API = '/api';
+
+    /* 当前知识库只从 URL 取（?kb_id=）：跳转时显式携带，回到问答页/知识库页都停在同一个库上。
+       不使用 localStorage 保存隐式状态，避免多标签/换人后出现"看着不对"的知识库。 */
+    const KB_ID = new URLSearchParams(location.search).get('kb_id') || '';
+    (function initNav() {
+        const suffix = KB_ID ? '?kb_id=' + encodeURIComponent(KB_ID) : '';
+        const qaLink = document.getElementById('nav-qa');
+        if (qaLink) qaLink.href = '/ui/index.html' + suffix;
+        const kbLink = document.getElementById('nav-kb');
+        if (kbLink) kbLink.href = '/ui/kb.html' + suffix;
+    })();
+
+    function escHTML(value) {
+        return String(value === null || value === undefined ? '' : value)
+            .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;');
+    }
+    function statusTag(status) {
+        const map = { ok: 'tag-ok', failed: 'tag-failed', running: 'tag-running', degraded: 'tag-degraded' };
+        return '<span class="tag ' + (map[status] || 'tag-running') + '">' + escHTML(status) + '</span>';
+    }
+    function metric(label, value, level) {
+        return '<div class="metric"><div class="label">' + escHTML(label) + '</div>'
+             + '<div class="value ' + (level || '') + '">' + escHTML(value) + '</div></div>';
+    }
+    function ms(value) { return value === null || value === undefined ? '-' : value + ' ms'; }
+
+    async function loadOverview() {
+        const hours = document.getElementById('hours').value;
+        const resp = await fetch(`${API}/observability/overview?hours=${hours}&with_dependencies=false`);
+        if (!resp.ok) { document.getElementById('qa-metrics').innerHTML = '<p class="error-text">读取失败（需要登录）</p>'; return; }
+        const data = (await resp.json()).data;
+
+        const qa = data.qa;
+        document.getElementById('qa-metrics').innerHTML =
+            metric('请求量', qa.requests)
+            + metric('成功率', (qa.success_rate * 100).toFixed(1) + '%', qa.success_rate < 0.9 ? 'warn' : '')
+            + metric('失败数', qa.failed, qa.failed > 0 ? 'bad' : '')
+            + metric('平均耗时', ms(qa.avg_total_ms))
+            + metric('P95 耗时', ms(qa.p95_total_ms))
+            + metric('慢请求(>' + qa.slow_threshold_ms + 'ms)', qa.slow_requests, qa.slow_requests > 0 ? 'warn' : '')
+            + metric('首 Token 平均', ms(qa.avg_first_token_ms))
+            + metric('无召回比例', (qa.no_recall_ratio * 100).toFixed(1) + '%')
+            + metric('降级次数', qa.degrade_total, qa.degrade_total > 0 ? 'warn' : '');
+
+        const tasks = data.document_tasks;
+        document.getElementById('feature-metrics').innerHTML =
+            metric('问题改写', data.features.rewrite)
+            + metric('多查询', data.features.multi_query)
+            + metric('HyDE', data.features.hyde)
+            + metric('Rerank 平均', ms(data.rerank.avg_ms))
+            + metric('Rerank 失败', data.rerank.failed, data.rerank.failed > 0 ? 'bad' : '')
+            + metric('文档任务完成', tasks.completed)
+            + metric('文档任务失败', tasks.failed, tasks.failed > 0 ? 'bad' : '')
+            + metric('文档任务处理中', tasks.processing)
+            + metric('观测条数', (data.storage.traces !== undefined ? data.storage.traces + ' / ' + data.storage.spans : '仅统计自己的知识库'));
+
+        document.getElementById('recent-errors').innerHTML = (data.recent_errors || []).length
+            ? '<table><tr><th>时间</th><th>类型</th><th>问题/任务</th><th>错误</th></tr>'
+              + data.recent_errors.map(row => '<tr><td>' + escHTML(row.created_at) + '</td><td>' + escHTML(row.biz_type)
+                  + '</td><td>' + escHTML((row.question || '').slice(0, 40)) + '</td><td class="error-text">'
+                  + escHTML(row.error) + '</td></tr>').join('') + '</table>'
+            : '<p class="muted">窗口内没有失败记录</p>';
+
+        // LangSmith：只显示状态与项目链接（Key 是掩码，不会回显明文）
+        const ls = data.langsmith || {};
+        document.getElementById('langsmith').innerHTML = ls.enabled
+            ? '<p class="muted">已开启 · 项目 <b>' + escHTML(ls.project) + '</b> · 采样率 '
+              + escHTML(String(ls.sampling_rate === null || ls.sampling_rate === undefined ? '-' : ls.sampling_rate))
+              + ' · Key ' + escHTML(ls.api_key || '') + '</p>'
+              + '<p><a href="' + escHTML(ls.project_url || '') + '" target="_blank" rel="noopener">在 LangSmith 打开项目 →</a></p>'
+              + '<p class="muted">注意：LLM 输入的 prompt 与检索上下文会上传到 LangSmith（自研观测数据仍在本地）。</p>'
+            : '<p class="muted">未开启（' + escHTML(ls.reason || '未配置') + '）。'
+              + '开启方法：在 .env 中设置 <code>LANGSMITH_ENABLED=true</code> 与 '
+              + '<code>LANGSMITH_API_KEY</code> 后重启服务（web 与 worker 都要重启）。</p>';
+
+        // 数据维护卡片：显示当前占用与时间范围，便于判断是否该清理
+        const infoEl = document.getElementById('storage-info');
+        if (infoEl) {
+            const st = data.storage || {};
+            infoEl.textContent = (st.traces === undefined)
+                ? '普通用户看不到全局观测占用（只统计自己名下的知识库）'
+                : ('当前占用：追踪 ' + st.traces + ' 条 / 阶段 ' + st.spans + ' 条'
+                   + (st.earliest ? '　时间范围：' + st.earliest + ' ~ ' + st.latest : '　（暂无数据）'));
+        }
+    }
+
+    /* ── 追踪列表：分页 + 勾选批量删除 + 时间快捷范围 ─────────
+       设计取舍：用户不需要理解 trace_id——
+       列表按"时间范围/类型/状态"筛选，勾选后批量删；单行也能直接删。 */
+    let tracePage = 1;
+    let traceTotal = 0;
+    const selectedTraces = new Set();
+
+    function resetTracePage() {
+        tracePage = 1;
+        selectedTraces.clear();
+        loadTraces();
+    }
+
+    function changeTracePage(delta) {
+        const size = parseInt(document.getElementById('trace-page-size').value) || 20;
+        const maxPage = Math.max(1, Math.ceil(traceTotal / size));
+        const next = tracePage + delta;
+        if (next < 1 || next > maxPage) return;
+        tracePage = next;
+        loadTraces();
+    }
+
+    function onTraceCheck(box) {
+        if (box.checked) selectedTraces.add(box.value);
+        else selectedTraces.delete(box.value);
+        updateSelectionInfo();
+    }
+
+    function toggleAllTraces(box) {
+        document.querySelectorAll('.trace-check').forEach(item => {
+            item.checked = box.checked;
+            if (box.checked) selectedTraces.add(item.value);
+            else selectedTraces.delete(item.value);
+        });
+        updateSelectionInfo();
+    }
+
+    function updateSelectionInfo() {
+        document.getElementById('trace-selected-info').textContent = '已选 ' + selectedTraces.size + ' 条';
+        document.getElementById('delete-selected-btn').disabled = selectedTraces.size === 0;
+    }
+
+    function pageTraceIds() {
+        return Array.from(document.querySelectorAll('.trace-check')).map(box => box.value);
+    }
+
+    function traceMessage(text, kind) {
+        const el = document.getElementById('trace-msg');
+        el.className = 'muted ' + (kind || '');
+        el.textContent = text;
+    }
+
+    async function loadTraces() {
+        const bizType = document.getElementById('biz-type').value;
+        const status = document.getElementById('status-filter').value;
+        const hours = document.getElementById('trace-hours').value;
+        const size = parseInt(document.getElementById('trace-page-size').value) || 20;
+        const params = new URLSearchParams({ limit: size, offset: (tracePage - 1) * size });
+        if (bizType) params.set('biz_type', bizType);
+        if (status) params.set('status', status);
+        if (hours) params.set('hours', hours);
+
+        const resp = await fetch(`${API}/observability/traces?${params.toString()}`);
+        if (!resp.ok) { document.getElementById('traces').innerHTML = '<p class="error-text">读取失败</p>'; return; }
+        const data = (await resp.json()).data;
+        traceTotal = data.total || 0;
+
+        const size2 = size;
+        const maxPage = Math.max(1, Math.ceil(traceTotal / size2));
+        if (!data.items.length && tracePage > 1) {   // 删空一页后自动回退
+            tracePage -= 1;
+            return loadTraces();
+        }
+
+        if (!data.items.length) {
+            document.getElementById('traces').innerHTML = '<p class="muted">该时间范围内暂无记录</p>';
+        } else {
+            document.getElementById('traces').innerHTML = '<table>'
+                + '<tr><th style="width:34px;"><input type="checkbox" onchange="toggleAllTraces(this)"></th>'
+                + '<th>时间</th><th>类型</th><th>问题/文件</th><th>追踪编号</th><th>状态</th>'
+                + '<th>总耗时</th><th>首Token</th><th>降级</th><th>操作</th></tr>'
+                + data.items.map(item => '<tr>'
+                    + '<td><input type="checkbox" class="trace-check" value="' + escHTML(item.trace_id) + '"'
+                    + (selectedTraces.has(item.trace_id) ? ' checked' : '') + ' onchange="onTraceCheck(this)"></td>'
+                    + '<td>' + escHTML(item.created_at) + '</td>'
+                    + '<td>' + escHTML(item.biz_type) + '</td>'
+                    + '<td>' + escHTML((item.question || '').slice(0, 36)) + '</td>'
+                    + '<td class="muted" title="' + escHTML(item.trace_id) + '">'
+                    + escHTML((item.trace_id || '').slice(0, 12)) + '…</td>'
+                    + '<td>' + statusTag(item.status) + '</td>'
+                    + '<td>' + ms(item.total_ms) + '</td>'
+                    + '<td>' + ms(item.first_token_ms) + '</td>'
+                    + '<td>' + (item.degrade_count || 0) + '</td>'
+                    + '<td><button onclick="showTrace(\'' + escHTML(item.trace_id) + '\')">详情</button> '
+                    + '<button class="danger" onclick="deleteTrace(\'' + escHTML(item.trace_id) + '\')">删除</button></td>'
+                    + '</tr>').join('') + '</table>';
+        }
+
+        document.getElementById('trace-page-info').textContent =
+            `第 ${tracePage} / ${maxPage} 页，共 ${traceTotal} 条`;
+        document.getElementById('trace-prev').disabled = tracePage <= 1;
+        document.getElementById('trace-next').disabled = tracePage >= maxPage;
+        document.getElementById('delete-page-btn').textContent = '删除本页（' + data.items.length + ' 条）';
+        updateSelectionInfo();
+    }
+
+    /* 批量删除：选中 / 本页 / 当前时间范围内的全部（都走 mode=trace_ids 或 mode=range） */
+    async function deleteTracesByIds(ids, note) {
+        if (!ids.length) { traceMessage('没有需要删除的记录', 'warn'); return; }
+        if (!confirm(`将删除 ${ids.length} 条追踪记录（${note}）。\n只删观测数据，不影响知识库、文档与问答记录。\n\n确认删除？`)) return;
+        try {
+            const result = await postCleanup({ mode: 'trace_ids', trace_ids: ids, dry_run: false });
+            traceMessage('已删除 ' + result.deleted_traces + ' 条追踪 / ' + result.deleted_spans
+                + ' 条阶段；剩余 ' + result.remaining_traces + ' 条', 'ok');
+            selectedTraces.clear();
+            loadOverview();
+            loadTraces();
+        } catch (err) {
+            traceMessage('删除失败：' + err.message, 'warn');
+        }
+    }
+
+    function deleteSelected() {
+        deleteTracesByIds(Array.from(selectedTraces), '当前勾选');
+    }
+
+    function deleteCurrentPage() {
+        deleteTracesByIds(pageTraceIds(), '当前页全部');
+    }
+
+    async function deleteByRange() {
+        const hours = parseInt(document.getElementById('trace-hours').value) || 0;
+        const payload = hours ? { mode: 'range', hours: hours } : { mode: 'all' };
+        const label = hours ? ('最近 ' + hours + ' 小时内的全部记录') : '全部记录';
+        try {
+            const preview = await postCleanup(Object.assign({}, payload, { dry_run: true }));
+            if (!preview.matched_traces) { traceMessage('该范围内没有观测数据', 'warn'); return; }
+            if (!confirm(`将删除 ${preview.matched_traces} 条追踪 / ${preview.matched_spans} 条阶段（${label}）。\n`
+                + '不可撤销，但不影响知识库、文档与问答记录。\n\n确认删除？')) return;
+            const result = await postCleanup(Object.assign({}, payload, { dry_run: false }));
+            traceMessage('已删除 ' + result.deleted_traces + ' 条追踪 / ' + result.deleted_spans
+                + ' 条阶段；剩余 ' + result.remaining_traces + ' 条', 'ok');
+            selectedTraces.clear();
+            tracePage = 1;
+            loadOverview();
+            loadTraces();
+        } catch (err) {
+            traceMessage('删除失败：' + err.message, 'warn');
+        }
+    }
+
+    async function loadHealth() {
+        const resp = await fetch('/health/ready');
+        const data = await resp.json();
+        const rows = Object.keys(data.dependencies).map(name => {
+            const item = data.dependencies[name];
+            return '<tr><td>' + escHTML(name) + '</td><td>' + statusTag(item.status) + '</td><td>'
+                + ms(item.latency_ms) + '</td><td class="error-text">' + escHTML(item.error || '') + '</td></tr>';
+        }).join('');
+        document.getElementById('dependencies').innerHTML =
+            '<p class="muted">整体状态：' + escHTML(data.status) + '（HTTP ' + resp.status + '）'
+            + (data.unhealthy && data.unhealthy.length ? '，不可用：' + escHTML(data.unhealthy.join(', ')) : '')
+            + '</p><table><tr><th>依赖</th><th>状态</th><th>耗时</th><th>错误</th></tr>' + rows + '</table>';
+    }
+
+    async function showTrace(traceId) {
+        const resp = await fetch(`${API}/observability/traces/${encodeURIComponent(traceId)}`);
+        if (!resp.ok) { alert('读取执行详情失败'); return; }
+        const trace = (await resp.json()).data;
+        const overlay = document.createElement('div');
+        overlay.className = 'modal-overlay';
+        overlay.onclick = function(e) { if (e.target === overlay) overlay.remove(); };
+        overlay.innerHTML = '<div class="modal-box">'
+            + '<div class="modal-header"><h3>执行详情</h3>'
+            + '<button class="modal-close" onclick="this.closest(\'.modal-overlay\').remove()">&times;</button></div>'
+            + '<div class="modal-body">' + renderTrace(trace) + '</div></div>';
+        document.body.appendChild(overlay);
+    }
+
+    function renderTrace(trace) {
+        let html = '<div class="muted">追踪编号：' + escHTML(trace.trace_id) + '　状态：'
+            + escHTML(trace.status) + '　总耗时：' + ms(trace.total_ms) + '　首 Token：' + ms(trace.first_token_ms) + '</div>'
+            + '<div style="margin:6px 0;font-size:13px;">原始问题：' + escHTML(trace.question) + '</div>';
+        if (trace.rewritten_question) html += '<div style="font-size:13px;">改写后：' + escHTML(trace.rewritten_question) + '</div>';
+        if (trace.expansions && trace.expansions.length) html += '<div style="font-size:13px;">扩展问题：' + trace.expansions.map(escHTML).join(' ｜ ') + '</div>';
+        if (trace.hyde_answer) html += '<div style="font-size:13px;">假设答案（仅检索）：' + escHTML(trace.hyde_answer) + '</div>';
+
+        html += '<h4 style="margin:12px 0 6px;">阶段耗时</h4><table><tr><th>阶段</th><th>耗时</th><th>状态</th><th>入/出</th><th>说明</th></tr>';
+        (trace.spans || []).forEach(span => {
+            const detail = span.error || (span.detail && Object.keys(span.detail).length ? JSON.stringify(span.detail) : '');
+            html += '<tr><td>' + escHTML(span.stage) + '</td><td>' + ms(span.duration_ms) + '</td><td>'
+                + statusTag(span.status) + '</td><td>' + (span.input_count === null ? '-' : span.input_count)
+                + ' / ' + (span.output_count === null ? '-' : span.output_count)
+                + '</td><td class="muted" style="word-break:break-all;">' + escHTML(detail) + '</td></tr>';
+        });
+        html += '</table>';
+
+        const degradations = (trace.detail && trace.detail.degradations) || [];
+        if (degradations.length) {
+            html += '<h4 style="margin:12px 0 6px;">降级记录</h4><ul style="font-size:13px;color:#d46b08;">'
+                + degradations.map(d => '<li>' + escHTML(d.stage) + '：' + escHTML(d.reason) + ' → ' + escHTML(d.fallback) + '</li>').join('')
+                + '</ul>';
+        }
+        const items = (trace.detail && trace.detail.top_items) || [];
+        if (items.length) {
+            html += '<h4 style="margin:12px 0 6px;">最终上下文候选</h4>';
+            items.forEach((item, idx) => {
+                const parentInfo = (item.parent_index !== null && item.parent_index >= 0)
+                    ? '（父块 #' + item.parent_index + ' / 子块 #' + item.sense_index + '）' : '';
+                html += '<div style="border-left:2px solid #e6f4ff;padding:4px 8px;margin-bottom:6px;font-size:13px;">'
+                    + (idx + 1) + '. ' + escHTML(item.source) + ' #' + item.chunk_index + parentInfo
+                    + '　最终分 ' + item.final_score
+                    + (item.hit_paths ? '　路径 ' + escHTML(item.hit_paths.join(', ')) : '')
+                    + '<div class="muted">' + escHTML(item.content_preview) + '</div></div>';
+            });
+        }
+        html += '<div class="muted" style="margin-top:10px;word-break:break-all;">配置快照：'
+            + escHTML(JSON.stringify(trace.config_snapshot || {})) + '</div>';
+        return html;
+    }
+
+    /* ── 数据维护（清理 / 导出）─────────────────────────
+       要点：
+       1. 范围由用户选（保留最近 N 天 / 全部 / 指定追踪编号），不再写死；
+       2. 执行清理前**先跑一次预览**，把"将删除多少条"写进确认框，避免盲删；
+       3. 预览与真实删除的提示用不同颜色区分；
+       4. 清理后自动刷新面板数据。 */
+    function toggleCleanupMode() {
+        const mode = document.getElementById('cleanup-mode').value;
+        document.getElementById('cleanup-ids').style.display = mode === 'trace_ids' ? 'inline-block' : 'none';
+        document.getElementById('cleanup-days').style.display = mode === 'older_than' ? 'inline-block' : 'none';
+    }
+
+    function cleanupParams(dryRun) {
+        const mode = document.getElementById('cleanup-mode').value;
+        const days = parseInt(document.getElementById('cleanup-days').value) || 7;
+        const ids = (document.getElementById('cleanup-ids').value || '')
+            .split(',').map(s => s.trim()).filter(Boolean);
+        if (mode === 'trace_ids' && !ids.length) {
+            throw new Error('请先填写要清理的追踪编号（多个用逗号分隔）');
+        }
+        return { mode: mode, days: days, trace_ids: ids, dry_run: dryRun };
+    }
+
+    async function postCleanup(payload) {
+        const resp = await fetch(`${API}/observability/traces/cleanup`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+        });
+        const data = await resp.json().catch(() => ({}));
+        if (!resp.ok) {
+            throw new Error((data.detail && (data.detail.message || data.detail)) || ('HTTP ' + resp.status));
+        }
+        return data.data;
+    }
+
+    /* 主操作：一键清空全部观测数据。
+       流程：自动预览 → 确认框写明"要删多少条" → 删除 → 显示"剩余 0 条"。
+       不需要用户理解 trace_id，也不需要选范围。 */
+    async function cleanupAll() {
+        const label = document.getElementById('cleanup-result');
+        label.className = 'muted';
+
+        let preview;
+        try {
+            preview = await postCleanup({ mode: 'all', dry_run: true });
+        } catch (err) {
+            label.className = 'muted warn';
+            label.textContent = '清理失败：' + err.message;
+            return;
+        }
+        if (preview.matched_traces === 0) {
+            label.textContent = '当前没有观测数据，无需清理';
+            return;
+        }
+        const ok = confirm('将清空全部观测数据：' + preview.matched_traces + ' 条追踪 / '
+            + preview.matched_spans + ' 条阶段。\n不可撤销，但不影响知识库、文档与问答记录。\n\n确认清空？');
+        if (!ok) return;
+
+        try {
+            const result = await postCleanup({ mode: 'all', dry_run: false });
+            label.className = 'muted ok';
+            label.textContent = '已清空 ' + result.deleted_traces + ' 条追踪 / ' + result.deleted_spans
+                + ' 条阶段；当前剩余 ' + result.remaining_traces + ' 条（面板已刷新）';
+            loadOverview();
+            loadTraces();
+        } catch (err) {
+            label.className = 'muted warn';
+            label.textContent = '清理失败：' + err.message;
+        }
+    }
+
+    async function cleanup(dryRun) {
+        const label = document.getElementById('cleanup-result');
+        label.className = 'muted';
+        let payload;
+        try {
+            payload = cleanupParams(dryRun);
+        } catch (err) {
+            label.className = 'muted warn';
+            label.textContent = err.message;
+            return;
+        }
+
+        // 真实清理：先预览拿到条数，再让用户确认（确认框里写明将删除多少）
+        if (!dryRun) {
+            let preview;
+            try {
+                preview = await postCleanup(Object.assign({}, payload, { dry_run: true }));
+            } catch (err) {
+                label.className = 'muted warn';
+                label.textContent = '预览失败：' + err.message;
+                return;
+            }
+            if (preview.matched_traces === 0) {
+                label.className = 'muted warn';
+                label.textContent = '当前范围内没有可清理的数据'
+                    + '（要清空全部，直接点上面的「清空全部观测数据」按钮）';
+                return;
+            }
+            const ok = confirm('将永久删除 ' + preview.matched_traces + ' 条追踪 / '
+                + preview.matched_spans + ' 条阶段数据。\n'
+                + '该操作不可撤销，但不会影响知识库、文档与问答记录。\n\n确认执行？');
+            if (!ok) return;
+        }
+
+        try {
+            const result = await postCleanup(payload);
+            if (dryRun) {
+                label.className = 'muted warn';
+                label.textContent = '预览：将删除 ' + result.matched_traces + ' 条追踪 / '
+                    + result.matched_spans + ' 条阶段（尚未删除）';
+            } else {
+                label.className = 'muted ok';
+                label.textContent = '已删除 ' + result.deleted_traces + ' 条追踪 / '
+                    + result.deleted_spans + ' 条阶段；剩余 ' + result.remaining_traces
+                    + ' 条追踪（面板已刷新）';
+                loadOverview();
+                loadTraces();
+            }
+        } catch (err) {
+            label.className = 'muted warn';
+            label.textContent = '清理失败：' + err.message;
+        }
+    }
+
+    async function exportTraces() {
+        const label = document.getElementById('cleanup-result');
+        label.className = 'muted';
+        try {
+            const resp = await fetch(`${API}/observability/traces/export?limit=2000`);
+            if (!resp.ok) {
+                const data = await resp.json().catch(() => ({}));
+                throw new Error((data.detail && (data.detail.message || data.detail)) || ('HTTP ' + resp.status));
+            }
+            const blob = new Blob([await resp.text()], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'rag-observability-' + new Date().toISOString().replace(/[:.]/g, '-') + '.json';
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            URL.revokeObjectURL(url);
+            label.className = 'muted ok';
+            label.textContent = '已导出观测数据 JSON（建议先备份再清理）';
+        } catch (err) {
+            label.className = 'muted warn';
+            label.textContent = '导出失败：' + err.message;
+        }
+    }
+
+    /* 列表里的「删除」：单条清理入口——用户不需要知道/输入 trace_id */
+    async function deleteTrace(traceId) {
+        if (!confirm('删除这条追踪记录？\n' + traceId + '\n\n只删观测数据，不影响知识库、文档与问答记录。')) return;
+        const label = document.getElementById('cleanup-result');
+        try {
+            const result = await postCleanup({ mode: 'trace_ids', trace_ids: [traceId], dry_run: false });
+            label.className = 'muted ok';
+            label.textContent = '已删除 1 条追踪（' + result.deleted_spans + ' 条阶段）；剩余 '
+                + result.remaining_traces + ' 条';
+            loadOverview();
+            loadTraces();
+        } catch (err) {
+            label.className = 'muted warn';
+            label.textContent = '删除失败：' + err.message;
+        }
+    }
+
+    // 非管理员：直接隐藏数据维护卡片（而不是等点了按钮才报 403）
+    (async function initMaintenance() {
+        toggleCleanupMode();   // 初始化范围相关的输入框可见性
+        try {
+            const resp = await fetch('/api/auth/me');
+            if (!resp.ok) return;
+            const me = (await resp.json()).data || {};
+            if (me.role !== 'admin') {
+                const card = document.getElementById('maintenance-card');
+                if (card) card.style.display = 'none';
+            }
+        } catch (e) {
+            // 拿不到身份就保持卡片可见，点按钮时后端仍会拦截（403）
+        }
+    })();
+
+    function loadAll() { loadOverview(); loadTraces(); loadHealth(); }
+    loadAll();
+    setInterval(loadOverview, 30000);
+</script>
+</body>
+</html>

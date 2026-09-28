@@ -1,0 +1,15 @@
+# ── 本机开发依赖（运行期依赖 + 开发工具）────────────────────
+# 运行期依赖统一由 requirements.runtime.txt 维护（容器镜像只装那一份），
+# 这里用 -r 引用，避免两份清单不同步 —— 历史上就因为两份各写各的，
+# 漏掉了 pypdf / python-docx / tiktoken / langchain-text-splitters（容器里必然 ImportError）。
+#
+# 安装：pip install -r requirements.txt
+-r requirements.runtime.txt
+
+# ── 离线集成测试（tests/，不需要真实 Milvus / Redis / 模型服务）──
+pytest==7.4.0
+httpx==0.28.1          # TestClient 与 scripts/test_ws_stream.py
+
+# ── 本机跑 Celery Worker（Windows 下默认 prefork 不可用，需 gevent 池）──
+# Linux 容器使用默认 prefork，因此不进运行期依赖。
+gevent==26.9.0

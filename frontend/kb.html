@@ -1,0 +1,2736 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>知识库管理</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, "Microsoft YaHei", sans-serif; background: #f5f5f5; color: #333; }
+        .container { max-width: 960px; margin: 0 auto; padding: 24px; }
+        h1 { font-size: 24px; margin-bottom: 20px; }
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+        .header-actions { display: flex; gap: 8px; align-items: center; }
+        .btn { padding: 8px 16px; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; }
+        .btn-primary { background: #1677ff; color: #fff; }
+        .btn-primary:hover { background: #0958d9; }
+        .btn-danger { background: #ff4d4f; color: #fff; }
+        .btn-danger:hover { background: #cf1322; }
+        .btn-cancel { background: #f0f0f0; color: #333; }
+        .btn-cancel:hover { background: #e0e0e0; }
+        .btn-back { background: #f0f0f0; color: #333; margin-bottom: 16px; }
+        .btn-back:hover { background: #e0e0e0; }
+        .btn-sm { padding: 4px 10px; font-size: 12px; }
+        .btn-qa { background: #722ed1; color: #fff; }
+        .btn-qa:hover { background: #531dab; }
+        .btn-build { background: #fa8c16; color: #fff; }
+        .btn-build:hover { background: #d46b08; }
+        .btn-actions { display: flex; gap: 8px; flex-shrink: 0; }
+        .search-input { padding: 8px 12px; border: 1px solid #d9d9d9; border-radius: 6px; font-size: 14px; width: 200px; }
+
+        /* 知识库列表 */
+        .kb-list { list-style: none; }
+        .kb-item {
+            background: #fff; border-radius: 8px; padding: 16px; margin-bottom: 8px;
+            display: flex; justify-content: space-between; align-items: center;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.08); cursor: pointer;
+        }
+        .kb-item:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.12); }
+        .kb-name { font-size: 16px; font-weight: 600; }
+        .kb-desc { font-size: 13px; color: #999; margin-top: 4px; }
+        .kb-meta { font-size: 12px; color: #bbb; margin-top: 4px; }
+
+        /* 文档列表 */
+        .doc-list { list-style: none; }
+        .doc-item {
+            background: #fff; border-radius: 8px; padding: 12px 16px; margin-bottom: 6px;
+            display: flex; justify-content: space-between; align-items: center;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+        }
+        .doc-name { font-size: 14px; font-weight: 600; }
+        .doc-meta { font-size: 12px; color: #bbb; margin-top: 2px; }
+        .doc-actions { display: flex; gap: 6px; }
+        .btn-preview { background: #52c41a; color: #fff; }
+        .btn-preview:hover { background: #389e0d; }
+        .doc-empty { text-align: center; padding: 50px 0; color: #bbb; font-size: 14px; }
+        /* Ch10 新增：文档状态标签 */
+        .doc-status { display: inline-block; font-size: 11px; font-weight: 600;
+            padding: 1px 8px; border-radius: 3px; vertical-align: middle; }
+        .doc-status.uploaded { background: #f0f0f0; color: #999; }
+        .doc-status.parsing { background: #fff7e6; color: #fa8c16; }
+        .doc-status.indexing { background: #e6f4ff; color: #1677ff; }
+        .doc-status.completed { background: #f6ffed; color: #52c41a; }
+        .doc-status.failed { background: #fff2f0; color: #ff4d4f; }
+        /* Ch10 新增：任务队列面板样式 */
+        .task-list { list-style: none; }
+        .task-item { background: #fff; border: 1px solid #e8e8e8; border-radius: 8px;
+            padding: 14px 16px; margin-bottom: 8px; }
+        .task-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+        .task-filename { font-size: 14px; font-weight: 600; }
+        .task-status { font-size: 12px; padding: 2px 8px; border-radius: 4px; font-weight: 600; }
+        .task-status.uploaded { background: #e6f4ff; color: #1677ff; }
+        .task-status.parsing { background: #fff7e6; color: #fa8c16; }
+        .task-status.indexing { background: #f6ffed; color: #52c41a; }
+        .task-status.completed { background: #f6ffed; color: #389e0d; }
+        .task-status.failed { background: #fff2f0; color: #ff4d4f; }
+        .task-progress-bar { width: 100%; height: 6px; background: #f0f0f0;
+            border-radius: 3px; overflow: hidden; margin-bottom: 6px; }
+        .task-progress-fill { height: 100%; border-radius: 3px; transition: width 0.3s; }
+        .task-progress-fill.uploaded { background: #1677ff; }
+        .task-progress-fill.parsing { background: #fa8c16; }
+        .task-progress-fill.indexing { background: #52c41a; }
+        .task-progress-fill.completed { background: #389e0d; }
+        .task-progress-fill.failed { background: #ff4d4f; }
+        .task-step { font-size: 13px; color: #666; margin-bottom: 4px; }
+        .task-error { font-size: 12px; color: #ff4d4f; margin-top: 4px; }
+        .task-meta { font-size: 12px; color: #bbb; }
+        .task-actions { display: flex; gap: 6px; margin-top: 6px; }
+
+        /* 空状态 */
+        .empty { text-align: center; padding: 60px 0; color: #bbb; }
+        .empty p { font-size: 16px; }
+
+        /* 弹窗 */
+        .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.3); z-index: 100; }
+        .modal-overlay.active { display: flex; justify-content: center; align-items: center; }
+
+        /* Ch8 全局 loading 遮罩 */
+        .loading-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.25); z-index: 200; flex-direction: column; align-items: center; justify-content: center; gap: 16px; }
+        .loading-overlay.active { display: flex; }
+        .spinner { width: 40px; height: 40px; border: 4px solid #fff; border-top-color: #1677ff; border-radius: 50%; animation: spin 0.8s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        #loading-msg { color: #fff; font-size: 14px; background: rgba(0,0,0,0.5); padding: 4px 12px; border-radius: 6px; }
+        .modal { background: #fff; border-radius: 12px; padding: 24px; width: 480px; max-height: 85vh; overflow-y: auto; }
+        .modal h2 { font-size: 18px; margin-bottom: 16px; }
+        .form-group { margin-bottom: 12px; }
+        .form-group label { display: block; font-size: 13px; color: #666; margin-bottom: 4px; }
+        .form-group input, .form-group textarea, .form-group select {
+            width: 100%; padding: 8px 12px; border: 1px solid #d9d9d9; border-radius: 6px; font-size: 14px;
+        }
+        .form-group textarea { height: 60px; resize: vertical; }
+        /* 【易错】上面的 .form-group input 是 width:100%，会把复选框也拉成一整行，
+           导致"方框和文字对不齐"，这里单独纠正复选框尺寸与对齐 */
+        .form-group input[type="checkbox"], .form-group input[type="radio"],
+        .form-row input[type="checkbox"], .form-row input[type="radio"] {
+            width: 15px; height: 15px; padding: 0; margin: 0 6px 0 0;
+            vertical-align: -2px; accent-color: #1677ff; flex-shrink: 0; cursor: pointer;
+        }
+        /* 一行内并排多个控件时用 .form-row：统一垂直居中，间距一致 */
+        .form-row {
+            display: flex; align-items: center; flex-wrap: wrap;
+            gap: 12px; margin-bottom: 12px;
+        }
+        .form-row > label {
+            display: inline-flex; align-items: center; gap: 6px;
+            font-size: 13px; color: #666; margin: 0; white-space: nowrap; cursor: pointer;
+        }
+        .form-row > label.plain { cursor: default; }
+        .form-row input[type="number"] { width: 88px; padding: 6px 10px; }
+        .form-row input[type="text"] { padding: 6px 10px; }
+        .form-row select { padding: 6px 10px; }
+        .modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 16px; }
+        .error { color: #ff4d4f; font-size: 13px; margin-top: 8px; display: none; }
+
+        /* 分块预览弹窗（700px 宽版） */
+        .preview-modal { width: 700px; max-height: 85vh; }
+        .chunk-list { max-height: 55vh; overflow-y: auto; }
+        .chunk-item {
+            background: #fafafa; border: 1px solid #e8e8e8; border-radius: 6px;
+            padding: 12px; margin-bottom: 8px;
+        }
+        .chunk-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+        .chunk-index { font-size: 12px; font-weight: 600; color: #1677ff; }
+        .chunk-chars { font-size: 12px; color: #bbb; }
+        .chunk-content { font-size: 13px; color: #555; line-height: 1.6; white-space: pre-wrap; word-break: break-all; }
+
+        /* 详情视图标题栏 */
+        .detail-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px; }
+        .detail-header .btn-back { margin-bottom: 8px; }
+        .detail-title { font-size: 20px; margin-top: 8px; }
+        .detail-info { font-size: 13px; color: #999; margin-bottom: 16px; }
+
+        /* Tab 切换 */
+        .tab-bar { display: flex; margin-bottom: 16px; border-bottom: 2px solid #e8e8e8; }
+        .tab-item {
+            padding: 8px 20px; cursor: pointer; font-size: 14px; color: #666;
+            border-bottom: 2px solid transparent; margin-bottom: -2px; transition: all 0.2s;
+        }
+        .tab-item.active { color: #1677ff; border-bottom-color: #1677ff; font-weight: 600; }
+        .tab-item:hover { color: #1677ff; }
+
+        /* 召回测试面板 */
+        .recall-panel { background: #fff; border-radius: 8px; padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+        .recall-input-row { display: flex; gap: 8px; margin-bottom: 16px; }
+        .recall-input {
+            flex: 1; padding: 10px 14px; border: 1px solid #d9d9d9; border-radius: 6px;
+            font-size: 14px; outline: none; transition: border-color 0.2s;
+        }
+        .recall-input:focus { border-color: #1677ff; }
+        .recall-params { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 16px; align-items: flex-end; }
+        .param-group { display: flex; flex-direction: column; gap: 4px; }
+        .param-group label { font-size: 12px; color: #999; }
+        .param-group select, .param-group input {
+            padding: 6px 10px; border: 1px solid #d9d9d9; border-radius: 4px; font-size: 13px;
+        }
+        .param-check { display: flex; align-items: center; gap: 4px; font-size: 13px; cursor: pointer; padding-bottom: 6px; }
+        .param-check input { cursor: pointer; }
+        .btn-recall { background: #1677ff; color: #fff; padding: 10px 24px; font-size: 14px; }
+        .btn-recall:hover { background: #0958d9; }
+        .btn-recall:disabled { background: #d9d9d9; cursor: not-allowed; }
+
+        .recall-summary {
+            font-size: 13px; color: #666; margin-bottom: 12px; padding: 8px 12px;
+            background: #f6ffed; border-radius: 6px; border: 1px solid #b7eb8f;
+        }
+        .recall-debug-panel {
+            display: none; margin-bottom: 12px; padding: 12px;
+            background: #fafafa; border: 1px solid #d9d9d9; border-radius: 6px;
+        }
+        .recall-debug-title { margin-bottom: 10px; color: #333; font-size: 13px; font-weight: 600; }
+        .recall-debug-grid {
+            display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 8px;
+        }
+        .recall-debug-item { padding: 8px 10px; background: #fff; border: 1px solid #eee; border-radius: 4px; }
+        .recall-debug-label { display: block; margin-bottom: 3px; color: #999; font-size: 11px; }
+        .recall-debug-value { color: #333; font-size: 13px; font-weight: 500; }
+        .recall-result-list { max-height: 60vh; overflow-y: auto; }
+        .recall-item {
+            background: #fafafa; border: 1px solid #e8e8e8; border-radius: 6px;
+            padding: 14px; margin-bottom: 8px;
+        }
+        .recall-item-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+        .recall-rank { font-size: 13px; font-weight: 600; color: #1677ff; }
+        .recall-scores { display: flex; gap: 12px; flex-wrap: wrap; font-size: 12px; color: #999; }
+        .recall-score-tag { padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; }
+        .score-fused { background: #e6f4ff; color: #1677ff; }
+        .score-rerank { background: #f6ffed; color: #52c41a; }
+        .hit-source-tag {
+            display: inline-block; padding: 1px 6px; border-radius: 3px;
+            font-size: 10px; font-weight: 600; margin-left: 6px; vertical-align: middle;
+        }
+        .hit-source-index { background: #fff7e6; color: #fa8c16; }
+        .recall-source { font-size: 12px; color: #bbb; margin-bottom: 6px; }
+        .recall-content { font-size: 13px; color: #555; line-height: 1.6; white-space: pre-wrap; word-break: break-all; }
+        /* 父子分块的命中展示：子块（检索单元）与父块（喂给大模型的上下文）分开呈现 */
+        .recall-loc { font-size: 12px; color: #722ed1; margin-bottom: 8px; line-height: 1.6; }
+        .recall-block {
+            border-left: 3px solid #91caff; background: #f7fbff;
+            padding: 8px 10px; border-radius: 0 4px 4px 0; margin-bottom: 6px;
+        }
+        .recall-block.parent { border-left-color: #722ed1; background: #faf5ff; }
+        .recall-block-title { font-size: 11px; color: #999; margin-bottom: 4px; }
+        .recall-collapsed { max-height: 110px; overflow: hidden; }
+        .recall-more { font-size: 11px; color: #1677ff; cursor: pointer; margin-top: 4px; }
+        .recall-merged { font-size: 12px; color: #888; margin-top: 6px; line-height: 1.6; }
+
+        /* 上传预览（分块参数预览） */
+        .chunk-block {
+            background: #fafafa; border: 1px solid #e8e8e8; border-radius: 6px;
+            padding: 12px; margin-bottom: 8px;
+        }
+        .chunk-head { display: flex; justify-content: space-between; font-size: 12px; color: #1677ff; margin-bottom: 6px; }
+
+        /* Ch8 新增：索引问题面板（双栏布局） */
+        .index-layout { display: grid; grid-template-columns: 380px 1fr; gap: 16px; margin-bottom: 16px; }
+        .index-left, .index-right { background: #fff; border-radius: 8px; padding: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+        .idx-list { list-style: none; max-height: 50vh; overflow-y: auto; }
+        .idx-item {
+            background: #fafafa; border: 1px solid #e8e8e8; border-radius: 6px;
+            padding: 12px; margin-bottom: 6px; cursor: pointer; transition: all 0.15s;
+        }
+        .idx-item:hover { border-color: #bae0ff; background: #f0f5ff; }
+        .idx-item.active { border-color: #1677ff; background: #e6f4ff; }
+        .idx-item.active .idx-question { color: #003eb3; }
+        .idx-question { font-size: 14px; color: #333; line-height: 1.5; word-break: break-word; margin-bottom: 6px; }
+        .idx-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; }
+        .idx-tags { display: flex; gap: 6px; align-items: center; }
+        .idx-source-tag {
+            display: inline-block; padding: 1px 8px; border-radius: 10px;
+            font-size: 11px; font-weight: 600;
+        }
+        .idx-source-ai { background: #fff7e6; color: #d46b08; }
+        .idx-source-manual { background: #e6f4ff; color: #1677ff; }
+        .idx-link-count {
+            display: inline-block; background: #f0f0f0; color: #666; font-size: 11px;
+            padding: 1px 8px; border-radius: 10px; font-weight: 600;
+        }
+        .idx-meta { font-size: 11px; color: #bbb; }
+        .idx-actions { display: flex; gap: 4px; }
+        .idx-actions button { width: 26px; height: 26px; padding: 0; display: flex; align-items: center; justify-content: center; font-size: 13px; }
+        .idx-edit-area { display: grid; gap: 8px; margin-top: 8px; }
+        .idx-edit-area textarea {
+            width: 100%; height: 64px; padding: 8px 10px; border: 1px solid #d9d9d9;
+            border-radius: 6px; font-size: 13px; line-height: 1.5; resize: vertical;
+        }
+        .idx-edit-area textarea:focus { border-color: #1677ff; outline: none; }
+        .idx-edit-actions { display: flex; gap: 6px; }
+
+        /* 候选 chunk 面板 */
+        .candidate-header { font-size: 14px; font-weight: 600; margin-bottom: 12px; display: flex; align-items: center; justify-content: space-between; }
+        .candidate-filters { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; align-items: center; }
+        .candidate-filters select, .candidate-filters input {
+            padding: 5px 8px; border: 1px solid #d9d9d9; border-radius: 4px; font-size: 12px;
+        }
+        .candidate-list { max-height: 55vh; overflow-y: auto; }
+        .candidate-item {
+            background: #fafafa; border: 1px solid #e8e8e8; border-radius: 6px;
+            padding: 10px 12px; margin-bottom: 6px; display: flex; gap: 10px; align-items: flex-start;
+        }
+        .candidate-item.linked { background: #f0f5ff; border-color: #91caff; }
+        .candidate-check { margin-top: 2px; cursor: pointer; }
+        .candidate-info { flex: 1; min-width: 0; }
+        .candidate-source { font-size: 11px; color: #1677ff; font-weight: 600; margin-bottom: 2px; }
+        .candidate-content { font-size: 12px; color: #555; line-height: 1.5; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+        .linked-badge {
+            display: inline-block; padding: 1px 6px; border-radius: 3px;
+            font-size: 10px; font-weight: 600; background: #e6f4ff; color: #1677ff; margin-left: 6px;
+        }
+
+        /* 索引命中测试 */
+        .idx-retrieve-section { margin-top: 16px; padding-top: 16px; border-top: 1px solid #e8e8e8; }
+        .idx-retrieve-section > h3 { font-size: 15px; margin-bottom: 12px; }
+
+        /* 自动生成提示词弹窗 */
+        #build-overlay .modal textarea { height: 200px; resize: vertical; }
+
+        /* Ch9 新增：认证相关 */
+        .auth-bar {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 10px 0; margin-bottom: 12px; font-size: 14px;
+        }
+        .auth-bar .user-info { color: #666; }
+        .auth-bar .user-info strong { color: #333; }
+        .btn-logout { background: #f0f0f0; color: #999; font-size: 13px; padding: 4px 12px; }
+        .btn-logout:hover { background: #e0e0e0; color: #666; }
+
+        .auth-overlay {
+            position: fixed; inset: 0; background: #f5f5f5; z-index: 999;
+            display: flex; justify-content: center; align-items: center;
+        }
+        .auth-card {
+            background: #fff; border-radius: 12px; padding: 32px;
+            width: 380px; box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+        }
+        .auth-card h2 { font-size: 20px; margin-bottom: 20px; text-align: center; }
+        .auth-card .form-group { margin-bottom: 14px; }
+        .auth-card .form-group input { width: 100%; box-sizing: border-box; }
+        .auth-card .auth-error { color: #ff4d4f; font-size: 13px; margin-bottom: 10px; text-align: center; display: none; }
+        .auth-card .auth-switch { text-align: center; margin-top: 16px; font-size: 13px; color: #999; }
+        .auth-card .auth-switch a { color: #1677ff; cursor: pointer; text-decoration: underline; }
+        .auth-card .btn-submit { width: 100%; padding: 10px; font-size: 15px; margin-top: 8px; }
+    </style>
+</head>
+<body>
+    <!-- 登录/注册遮罩层（Ch9 新增） -->
+    <div class="auth-overlay" id="auth-overlay" style="display:none;">
+        <div class="auth-card">
+            <h2 id="auth-title">登录</h2>
+            <div class="auth-error" id="auth-error"></div>
+            <div class="form-group">
+                <label>用户名</label>
+                <input type="text" id="auth-username" placeholder="请输入用户名">
+            </div>
+            <div class="form-group">
+                <label>密码</label>
+                <input type="password" id="auth-password" placeholder="请输入密码">
+            </div>
+            <div class="form-group" id="auth-display-group" style="display:none;">
+                <label>显示名称（可选）</label>
+                <input type="text" id="auth-display" placeholder="不填则使用用户名">
+            </div>
+            <button class="btn btn-primary btn-submit" onclick="submitAuth()">登录</button>
+            <div class="auth-switch" id="auth-switch">
+                还没有账号？<a onclick="toggleAuthMode()">立即注册</a>
+            </div>
+        </div>
+    </div>
+    <div id="main-app">
+    <div class="container">
+        <!-- ═══ 视图一：知识库列表 ═══ -->
+        <div id="kb-view">
+            <div class="auth-bar">
+                <h1>知识库管理</h1>
+                <div class="user-info">
+                    当前用户: <strong id="current-username"></strong>
+                    <span id="current-role" style="font-size:12px; color:#999; margin-left:8px;"></span>
+                    <a href="/ui/observability.html" target="_blank"
+                       style="font-size:13px; color:#1677ff; margin-right:10px;">运行观测</a>
+                    <button class="btn btn-logout" onclick="logout()">退出登录</button>
+                </div>
+            </div>
+            <div class="header">
+                <span id="kb-count">共 0 个知识库</span>
+                <div class="header-actions">
+                    <!-- 搜索：输入实时过滤(oninput)，也可点"搜索"按钮或按回车触发 -->
+                    <input type="text" class="search-input" id="search-input"
+                           placeholder="按名称搜索..." oninput="loadKBs()"
+                           onkeydown="if(event.key==='Enter')loadKBs()">
+                    <button class="btn btn-primary" onclick="loadKBs()">搜索</button>
+                    <button class="btn btn-primary" onclick="openCreateModal()">+ 创建知识库</button>
+                </div>
+            </div>
+            <ul class="kb-list" id="kb-list"></ul>
+            <!-- 分页：还有下一页时显示"加载更多"；已加载超过一页时显示"收起" -->
+            <div style="text-align:center; margin-top:12px;">
+                <button class="btn btn-primary" id="load-more-btn" style="display:none;"
+                        onclick="loadMoreKBs()">加载更多</button>
+                <button class="btn btn-cancel" id="collapse-btn" style="display:none; margin-left:8px;"
+                        onclick="collapseKBs()">收起</button>
+            </div>
+            <div class="empty" id="empty-state" style="display:none;">
+                <p id="empty-title">暂无知识库</p>
+                <p style="font-size:13px; margin-top:8px;">点击上方按钮创建第一个知识库</p>
+            </div>
+        </div>
+
+        <!-- ═══ 视图二：知识库详情（文档管理 + 召回测试 + 索引问题） ═══ -->
+        <div id="doc-view" style="display:none;">
+            <div class="detail-header">
+                <div>
+                    <button class="btn btn-back" onclick="backToList()">← 返回</button>
+                    <div class="detail-title" id="doc-kb-title"></div>
+                </div>
+                <div style="display:flex; gap:8px;">
+                    <button class="btn btn-cancel" onclick="openChunkConfigModal()">分块配置</button>
+                    <button class="btn btn-cancel" onclick="openStrategyModal()">检索策略</button>
+                    <button class="btn btn-build" id="btn-reindex" style="display:none;" onclick="reindexAll()">重新索引</button>
+                    <button class="btn btn-primary" onclick="openUploadModal()">+ 上传文档</button>
+                </div>
+            </div>
+            <div class="detail-info" id="doc-kb-meta"></div>
+            <div class="detail-info" id="doc-kb-config"></div>
+
+            <!-- Tab 切换 -->
+            <div class="tab-bar">
+                <div class="tab-item active" onclick="switchTab('documents')">文档管理</div>
+                <div class="tab-item" onclick="switchTab('recall')">召回测试</div>
+                <div class="tab-item" onclick="switchTab('index')">索引问题</div>
+                <div class="tab-item" onclick="switchTab('qa')">RAG 问答</div>
+                <div class="tab-item" onclick="switchTab('tasks')">任务队列</div>
+            </div>
+
+            <!-- 文档管理 Tab -->
+            <div id="tab-documents">
+                <ul class="doc-list" id="doc-list"></ul>
+                <div class="doc-empty" id="doc-empty" style="display:none;">
+                    该知识库还没有文档，点击右上角"上传文档"添加
+                </div>
+            </div>
+
+            <!-- 召回测试 Tab -->
+            <div id="tab-recall" style="display:none;">
+                <div class="recall-panel">
+                    <div class="recall-input-row">
+                        <input type="text" class="recall-input" id="recall-query"
+                               placeholder="输入查询文本，测试检索效果..."
+                               onkeydown="if(event.key==='Enter')runRecall()">
+                        <button class="btn btn-recall" onclick="runRecall()">检索</button>
+                    </div>
+
+                    <div class="recall-params">
+                        <div class="param-group">
+                            <label>检索模式</label>
+                            <select id="recall-mode">
+                                <option value="hybrid">hybrid</option>
+                                <option value="dense_only">dense_only</option>
+                                <option value="sparse_only">sparse_only</option>
+                            </select>
+                        </div>
+                        <div class="param-group">
+                            <label>运行模式</label>
+                            <select id="recall-run-mode" onchange="syncRecallMode()">
+                                <option value="">跟随知识库策略</option>
+                                <option value="basic">基础模式</option>
+                                <option value="advanced">高级模式</option>
+                            </select>
+                        </div>
+                        <div class="param-group">
+                            <label>融合算法</label>
+                            <select id="recall-fusion">
+                                <option value="">跟随策略</option>
+                                <option value="rrf">RRF</option>
+                                <option value="weighted">加权归一化</option>
+                            </select>
+                        </div>
+                        <div class="param-group" style="flex:1; min-width:260px;">
+                            <label>高级能力（勾选=本次开启，需配合运行模式）</label>
+                            <div style="display:flex; gap:10px; font-size:12px; align-items:center;">
+                                <label><input type="checkbox" id="recall-rewrite" onchange="syncRecallMode()"> 改写</label>
+                                <label><input type="checkbox" id="recall-multi" onchange="syncRecallMode()"> 多查询</label>
+                                <label><input type="checkbox" id="recall-hyde" onchange="syncRecallMode()"> HyDE</label>
+                                <input type="text" id="recall-history" placeholder="上一轮问题（改写用，可选）"
+                                       style="flex:1; min-width:150px; padding:6px 10px; border:1px solid #d9d9d9; border-radius:4px; font-size:12px;">
+                            </div>
+                            <span id="recall-ability-hint" style="font-size:11px;color:#bbb;margin-top:2px;"></span>
+                        </div>
+                        <div class="param-group">
+                            <label>Top-K</label>
+                            <input type="number" id="recall-top-k" value="5" min="1" max="20" style="width:70px;">
+                        </div>
+                        <div class="param-group">
+                            <label>候选K</label>
+                            <input type="number" id="recall-candidate-k" value="20" min="1" max="50" style="width:70px;">
+                        </div>
+                        <div class="param-group">
+                            <label>Min分</label>
+                            <input type="number" id="recall-min-score" value="0" min="0" max="1" step="0.1" style="width:70px;">
+                        </div>
+                        <div class="param-group">
+                            <label>Dense权重</label>
+                            <input type="number" id="recall-dense-weight" value="0.5" min="0" max="1" step="0.1" style="width:70px;">
+                        </div>
+                        <div class="param-group">
+                            <label>Sparse权重</label>
+                            <input type="number" id="recall-sparse-weight" value="0.5" min="0" max="1" step="0.1" style="width:70px;">
+                        </div>
+                        <label class="param-check"><input type="checkbox" id="recall-rerank" checked> 启用Rerank</label>
+                        <label class="param-check"><input type="checkbox" id="recall-enable-index"> 启用索引问题</label>
+                        <label class="param-check"><input type="checkbox" id="recall-debug"> 调试信息</label>
+                    </div>
+
+                    <div id="recall-results" style="display:none;">
+                        <div class="recall-summary" id="recall-summary"></div>
+                        <div class="recall-debug-panel" id="recall-debug-panel">
+                            <div class="recall-debug-title">Debug 信息</div>
+                            <div class="recall-debug-grid" id="recall-debug-grid"></div>
+                        </div>
+                        <div class="recall-result-list" id="recall-result-list"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- RAG 问答面板 -->
+            <div id="tab-qa" style="display:none;">
+                <div style="text-align:center; padding:40px 0;">
+                    <p style="font-size:16px; color:#666; margin-bottom:16px;">打开 RAG 问答页面，向知识库提问</p>
+                    <button class="btn btn-qa" onclick="openQA()">进入 RAG 问答</button>
+                    <!-- 次要入口：需要"一边看召回测试/分块配置、一边问答"时用新标签（URL 同样带 kb_id，无隐式状态） -->
+                    <div style="margin-top:10px;">
+                        <span style="font-size:12px; color:#1677ff; cursor:pointer;"
+                              onclick="openQANewTab()">在新标签打开 ↗</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 索引问题面板（第8章） -->
+            <div id="tab-index" style="display:none;">
+                <p style="font-size:13px; color:#666; margin-bottom:12px;">
+                    索引问题是一种精准检索策略：为知识库创建假设性问题，绑定到相关文档段落，当用户查询命中问题时直接返回绑定的内容。
+                </p>
+                <div class="index-layout">
+                    <!-- 左面板：索引问题列表 -->
+                    <div class="index-left">
+                        <div style="display:flex; gap:8px; margin-bottom:12px;">
+                            <button class="btn btn-primary btn-sm" onclick="openCreateIndexDialog()">+ 新增索引</button>
+                            <button class="btn btn-build btn-sm" onclick="openBuildDialog()">自动生成</button>
+                        </div>
+                        <ul class="idx-list" id="idx-list"></ul>
+                        <div class="empty" id="idx-empty" style="display:none;">
+                            <p>暂无索引问题</p>
+                            <p style="font-size:13px; margin-top:8px;">手动创建或自动生成</p>
+                        </div>
+                    </div>
+                    <!-- 右面板：候选 chunk 列表 -->
+                    <div class="index-right">
+                        <div class="candidate-header">
+                            <span id="candidate-title">Chunk 候选列表</span>
+                            <span id="candidate-count" style="font-size:12px; color:#999;"></span>
+                        </div>
+                        <div class="candidate-filters">
+                            <select id="filter-link-status" onchange="loadCandidates()">
+                                <option value="all">全部状态</option>
+                                <option value="linked">已关联</option>
+                                <option value="unlinked">未关联</option>
+                            </select>
+                            <select id="filter-file-name" onchange="loadCandidates()"></select>
+                            <input type="text" id="filter-keyword" placeholder="关键词筛选..." oninput="debounceLoadCandidates()">
+                        </div>
+                        <div class="candidate-list" id="candidate-list"></div>
+                        <div class="empty" id="candidate-empty" style="display:none;">
+                            <p>请先在左侧选中一个索引问题</p>
+                        </div>
+                    </div>
+                </div>
+                <!-- 索引命中测试 -->
+                <div class="idx-retrieve-section">
+                    <h3>索引命中测试</h3>
+                    <div class="recall-input-row">
+                        <input type="text" class="recall-input" id="index-retrieve-query"
+                               placeholder="输入问题关键词，测试索引匹配..."
+                               onkeydown="if(event.key==='Enter')runIndexRetrieve()">
+                        <label style="display:flex;align-items:center;gap:4px;white-space:nowrap;font-size:13px;color:#666;">
+                            阈值
+                            <input type="number" id="index-retrieve-min-score" value="0.5" step="0.05" min="0" max="1"
+                                   style="width:64px;padding:6px 8px;border:1px solid #d9d9d9;border-radius:6px;">
+                        </label>
+                        <button class="btn btn-primary" onclick="runIndexRetrieve()">检索索引</button>
+                    </div>
+                    <div id="index-retrieve-result" style="margin-top:12px;"></div>
+                </div>
+            </div>
+
+            <!-- Ch10 新增：任务队列面板 -->
+            <div id="tab-tasks" style="display:none;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+                    <h3 style="font-size:16px;">上传任务队列</h3>
+                    <button class="btn btn-primary" onclick="loadTasks()">刷新</button>
+                </div>
+                <ul class="task-list" id="task-list"></ul>
+                <div class="empty" id="task-empty" style="display:none;">
+                    <p>暂无任务</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 新增索引问题弹窗（第8章） -->
+    <div class="modal-overlay" id="create-index-overlay" onclick="closeCreateIndexDialog(event)">
+        <div class="modal" onclick="event.stopPropagation()">
+            <h2>新增索引问题</h2>
+            <div class="form-group">
+                <label>索引问题 *</label>
+                <textarea id="idx-question-input" placeholder="请输入一个问题，如：如何配置 Milvus？" maxlength="500"></textarea>
+            </div>
+            <div class="error" id="create-index-error"></div>
+            <div class="modal-actions">
+                <button class="btn btn-cancel" onclick="closeCreateIndexDialog()">取消</button>
+                <button class="btn btn-primary" onclick="confirmCreateIndex()">创建</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 自动生成索引问题弹窗（第8章） -->
+    <div class="modal-overlay" id="build-overlay" onclick="closeBuildDialog(event)">
+        <div class="modal" onclick="event.stopPropagation()">
+            <h2>自动生成索引问题</h2>
+            <div class="form-group">
+                <label>提示词模板（可选，{data} 会被替换为 chunk 内容）</label>
+                <textarea id="build-prompt">内容：{data}
+
+请总结上面的内容，并根据内容总结生成 3 个问题。
+回答要求：
+- 请只输出问题；
+- 请将每个问题放置&lt;question&gt;&lt;/question&gt;标签中。</textarea>
+            </div>
+            <div class="error" id="build-error"></div>
+            <div id="build-result" style="font-size:13px; margin-top:8px;"></div>
+            <div class="modal-actions">
+                <button class="btn btn-cancel" onclick="closeBuildDialog()">关闭</button>
+                <button class="btn btn-build" onclick="confirmBuild()">开始生成</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Ch8 全局 loading 遮罩 -->
+    <div class="loading-overlay" id="global-loading">
+        <div class="spinner"></div>
+        <span id="loading-msg">处理中...</span>
+    </div>
+
+    <!-- 查看完整 chunk 弹窗 -->
+    <div class="modal-overlay" id="chunk-view-overlay" onclick="closeChunkView(event)">
+        <div class="modal preview-modal" onclick="event.stopPropagation()">
+            <h2 id="chunk-view-title">Chunk 内容</h2>
+            <div class="chunk-content" id="chunk-view-body" style="max-height:60vh; overflow-y:auto;"></div>
+            <div class="modal-actions">
+                <button class="btn btn-cancel" onclick="closeChunkView()">关闭</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 创建知识库弹窗 -->
+    <div class="modal-overlay" id="create-overlay" onclick="closeCreateModal(event)">
+        <div class="modal" onclick="event.stopPropagation()">
+            <h2>创建知识库</h2>
+            <div class="form-group">
+                <label>名称 *</label>
+                <input type="text" id="kb-name" placeholder="请输入知识库名称" maxlength="100">
+            </div>
+            <div class="form-group">
+                <label>描述</label>
+                <textarea id="kb-desc" placeholder="可选：简要描述知识库用途"></textarea>
+            </div>
+            <div class="form-group">
+                <label>分块策略</label>
+                <select id="kb-chunk-strategy" onchange="toggleParentFields('kb')">
+                    <option value="general">通用分块</option>
+                    <option value="parent_child">父子分块（子块检索 + 父块供上下文）</option>
+                </select>
+                <div style="font-size:12px;color:#999;margin-top:4px;">
+                    父子分块时：下面的分隔符/长度/短块策略是<b>子块</b>参数（会被向量化、用于检索），
+                    父块参数在下方单独填写（只存库、用于生成上下文）。
+                </div>
+            </div>
+            <div class="form-group">
+                <label>分块最大长度</label>
+                <input type="number" id="kb-chunk-size" value="800" min="1" max="20000">
+            </div>
+            <div class="form-group">
+                <label>分块重叠长度（必须小于最大长度）</label>
+                <input type="number" id="kb-chunk-overlap" value="100" min="0" max="19999">
+            </div>
+            <div class="form-group">
+                <label>分隔符（按优先级从上到下，用 | 分隔；\n 表示换行，可留空使用默认）</label>
+                <textarea id="kb-chunk-separators" placeholder="\n\n|\n|。|！|？|；|."></textarea>
+            </div>
+            <div class="form-group">
+                <label>长度计算方式</label>
+                <select id="kb-chunk-length-mode">
+                    <option value="char">字符数</option>
+                    <option value="token">Token 数（近似口径）</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label><input type="checkbox" id="kb-chunk-keep-sep"> 保留分隔符</label>
+                <label style="margin-left:16px;"><input type="checkbox" id="kb-chunk-filter-ws" checked> 过滤空白分块</label>
+            </div>
+            <div class="form-group">
+                <label>过短分块处理（阈值以下的块）</label>
+                <select id="kb-chunk-short-policy" style="margin-bottom:6px;">
+                    <option value="keep">保留</option>
+                    <option value="merge">并入相邻块</option>
+                    <option value="drop">丢弃</option>
+                </select>
+                <input type="number" id="kb-chunk-min-length" value="0" min="0" placeholder="最短长度阈值，0 表示不处理">
+            </div>
+            <div id="kb-parent-fields" style="display:none;border-top:1px dashed #e8e8e8;padding-top:10px;margin-top:4px;">
+                <div class="form-group">
+                    <label>父块：段落分隔符（用 | 分隔，\n 表示换行）</label>
+                    <input type="text" id="kb-parent-separators" placeholder="\n\n|\n">
+                </div>
+                <div class="form-group">
+                    <label>父块：最大长度</label>
+                    <input type="number" id="kb-parent-size" value="2000" min="1" max="20000">
+                </div>
+                <div class="form-row">
+                    <label><input type="checkbox" id="kb-parent-keep-sep" checked> 父块保留段落分隔符</label>
+                </div>
+            </div>
+            <div class="error" id="create-error"></div>
+            <div class="modal-actions">
+                <button class="btn btn-cancel" onclick="closeCreateModal()">取消</button>
+                <button class="btn btn-primary" onclick="createKB()">创建</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 分块配置弹窗（查看 / 修改当前知识库的分块配置） -->
+    <div class="modal-overlay" id="chunk-config-overlay" onclick="closeChunkConfigModal(event)">
+        <div class="modal" onclick="event.stopPropagation()">
+            <h2>分块配置</h2>
+            <div style="font-size:12px;color:#999;margin-bottom:10px;" id="cc-hint"></div>
+            <div class="form-group">
+                <label>分块策略</label>
+                <select id="cc-chunk-strategy" onchange="toggleParentFields('cc')">
+                    <option value="general">通用分块</option>
+                    <option value="parent_child">父子分块（子块检索 + 父块供上下文）</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>分块最大长度</label>
+                <input type="number" id="cc-chunk-size" min="1" max="20000">
+            </div>
+            <div class="form-group">
+                <label>分块重叠长度（必须小于最大长度）</label>
+                <input type="number" id="cc-chunk-overlap" min="0" max="19999">
+            </div>
+            <div class="form-group">
+                <label>分隔符（按优先级从上到下，用 | 分隔；\n 表示换行）</label>
+                <textarea id="cc-chunk-separators"></textarea>
+            </div>
+            <div class="form-group">
+                <label>长度计算方式</label>
+                <select id="cc-chunk-length-mode">
+                    <option value="char">字符数</option>
+                    <option value="token">Token 数（近似口径）</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label><input type="checkbox" id="cc-chunk-keep-sep"> 保留分隔符</label>
+                <label style="margin-left:16px;"><input type="checkbox" id="cc-chunk-filter-ws"> 过滤空白分块</label>
+            </div>
+            <div class="form-group">
+                <label>过短分块处理（阈值以下的块）</label>
+                <select id="cc-chunk-short-policy" style="margin-bottom:6px;">
+                    <option value="keep">保留</option>
+                    <option value="merge">并入相邻块</option>
+                    <option value="drop">丢弃</option>
+                </select>
+                <input type="number" id="cc-chunk-min-length" min="0" placeholder="最短长度阈值，0 表示不处理">
+            </div>
+            <div id="cc-parent-fields" style="display:none;border-top:1px dashed #e8e8e8;padding-top:10px;">
+                <div class="form-group">
+                    <label>父块：段落分隔符（用 | 分隔，\n 表示换行）</label>
+                    <input type="text" id="cc-parent-separators" placeholder="\n\n|\n">
+                </div>
+                <div class="form-group">
+                    <label>父块：最大长度（需大于子块最大长度）</label>
+                    <input type="number" id="cc-parent-size" min="1" max="20000">
+                </div>
+                <div class="form-row">
+                    <label><input type="checkbox" id="cc-parent-keep-sep"> 父块保留段落分隔符</label>
+                </div>
+            </div>
+            <div class="error" id="cc-error"></div>
+            <div class="modal-actions">
+                <button class="btn btn-cancel" onclick="closeChunkConfigModal()">取消</button>
+                <button class="btn btn-cancel" onclick="resetChunkConfig()">填入默认值</button>
+                <button class="btn btn-primary" onclick="saveChunkConfig()">保存</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 检索策略弹窗（Advanced RAG 第 3 期） -->
+    <div class="modal-overlay" id="strategy-overlay" onclick="closeStrategyModal(event)">
+        <div class="modal" onclick="event.stopPropagation()">
+            <h2>检索策略</h2>
+            <div style="font-size:12px;color:#999;margin-bottom:10px;">
+                策略只影响**后续请求**，不会改变已完成的问答记录；召回测试/问答请求里的临时参数优先级更高。
+            </div>
+            <div class="form-group">
+                <label>检索模式</label>
+                <select id="st-mode">
+                    <option value="basic">基础模式（原有检索流程）</option>
+                    <option value="advanced">高级模式（改写/多查询/HyDE + 多路融合）</option>
+                </select>
+            </div>
+            <div class="form-row">
+                <label><input type="checkbox" id="st-rewrite" onchange="syncStrategyMode()"> 问题改写（依据最近对话历史）</label>
+                <label><input type="checkbox" id="st-multi" onchange="syncStrategyMode()"> 多查询扩展</label>
+                <input type="number" id="st-multi-count" min="1" max="8" value="3" title="扩展问题数量">
+                <label><input type="checkbox" id="st-hyde" onchange="syncStrategyMode()"> HyDE（假设答案）</label>
+            </div>
+            <div class="form-group">
+                <label>融合算法</label>
+                <select id="st-fusion">
+                    <option value="rrf">RRF（按名次融合，默认）</option>
+                    <option value="weighted">路径内 min-max 归一化加权</option>
+                </select>
+            </div>
+            <div class="form-row">
+                <label class="plain">Dense 权重</label><input type="number" id="st-dense" step="0.1" min="0" max="1">
+                <label class="plain">Sparse 权重</label><input type="number" id="st-sparse" step="0.1" min="0" max="1">
+            </div>
+            <div class="form-row">
+                <label><input type="checkbox" id="st-index"> 索引问题召回</label>
+                <span style="font-size:11px;color:#999;">
+                    两种模式都生效：把 Ch8 的索引问题也当成一条检索路径（该路径失败只降级、不影响其它路径）
+                </span>
+            </div>
+            <div class="form-row">
+                <label class="plain">每路候选上限</label><input type="number" id="st-per-path" min="1" max="100">
+                <label class="plain">总候选上限</label><input type="number" id="st-cap" min="1" max="500">
+            </div>
+            <div class="form-row">
+                <label><input type="checkbox" id="st-rerank"> 启用 Rerank</label>
+                <label class="plain">最终保留</label><input type="number" id="st-topn" min="1" max="50">
+                <label class="plain">最低相关度</label><input type="number" id="st-minscore" step="0.05" min="0" max="1">
+            </div>
+            <div class="form-group">
+                <label>上下文总长度上限（字符）</label>
+                <input type="number" id="st-maxcontext" min="200" max="50000" style="width:130px;">
+            </div>
+            <div class="error" id="st-error"></div>
+            <div class="modal-actions">
+                <button class="btn btn-cancel" onclick="closeStrategyModal()">取消</button>
+                <button class="btn btn-cancel" onclick="resetStrategy()">恢复默认</button>
+                <button class="btn btn-primary" onclick="saveStrategy()">保存</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 改名弹窗 -->
+    <div class="modal-overlay" id="rename-overlay" onclick="closeRename(event)">
+        <div class="modal" onclick="event.stopPropagation()">
+            <h2>修改名称</h2>
+            <div class="form-group">
+                <label>新名称 *</label>
+                <input type="text" id="rename-input" placeholder="请输入新名称" maxlength="100">
+            </div>
+            <div class="error" id="rename-error"></div>
+            <div class="modal-actions">
+                <button class="btn btn-cancel" onclick="closeRename()">取消</button>
+                <button class="btn btn-primary" onclick="renameKB()">保存</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 上传文档弹窗 -->
+    <div class="modal-overlay" id="upload-overlay" onclick="closeUploadModal(event)">
+        <div class="modal" onclick="event.stopPropagation()">
+            <h2>上传文档</h2>
+            <div class="form-group">
+                <label>选择文件（支持 PDF / TXT / MD / DOCX）</label>
+                <input type="file" id="upload-file" accept=".pdf,.txt,.md,.docx" onchange="clearUploadError()">
+            </div>
+            <!-- 分块参数（只读展示：实际分块由知识库配置决定，可在"分块配置"里修改） -->
+            <div style="display:flex; gap:12px; align-items:flex-end; margin-bottom:6px;">
+                <div class="form-group" style="margin-bottom:0;">
+                    <label>分块大小（来自知识库配置）</label>
+                    <input type="number" id="up-chunk-size" value="800" readonly style="width:110px;background:#f5f5f5;">
+                </div>
+                <div class="form-group" style="margin-bottom:0;">
+                    <label>分块重叠</label>
+                    <input type="number" id="up-chunk-overlap" value="100" readonly style="width:110px;background:#f5f5f5;">
+                </div>
+                <button class="btn btn-primary" onclick="previewUploadFile()">预览分块</button>
+            </div>
+            <div class="error" id="upload-error"></div>
+            <div id="upload-preview-body" style="max-height:220px; overflow-y:auto;"></div>
+            <div class="modal-actions">
+                <button class="btn btn-cancel" onclick="closeUploadModal()">取消</button>
+                <button class="btn btn-primary" onclick="uploadDocument()">上传</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 分块预览弹窗（700px 宽版） -->
+    <div class="modal-overlay" id="preview-overlay" onclick="closePreview(event)">
+        <div class="modal preview-modal" onclick="event.stopPropagation()">
+            <h2 id="preview-title">分块预览</h2>
+            <!-- 分块参数调节，修改后点"重新预览"即可重新分块 -->
+            <div style="display:flex; gap:12px; align-items:flex-end; margin-bottom:12px;">
+                <div class="form-group" style="margin-bottom:0;">
+                    <label>分块大小</label>
+                    <input type="number" id="pv-chunk-size" value="800" min="100" max="2000" style="width:110px;">
+                </div>
+                <div class="form-group" style="margin-bottom:0;">
+                    <label>分块重叠</label>
+                    <input type="number" id="pv-chunk-overlap" value="100" min="0" max="1000" style="width:110px;">
+                </div>
+                <button class="btn btn-primary" onclick="rePreview()">重新预览</button>
+            </div>
+            <div class="chunk-list" id="preview-body"></div>
+            <div class="modal-actions">
+                <button class="btn btn-cancel" onclick="closePreview()">关闭</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API = '/api';
+        const PAGE_SIZE = 10;      // 每页条数
+        let currentPage = 1;
+        let totalCount = 0;
+        let currentKeyword = '';
+        let currentKB = null;       // 当前进入详情的知识库对象
+        let renameTargetId = null;
+        let previewDocId = null;
+        let previewDocName = '';    // 分块预览弹窗当前文档名（重新预览时复用）
+        // Ch10 新增：轮询定时器
+        let docStatusTimer = null;   // 文档状态轮询定时器（2s）
+        let taskTimer = null;        // 任务队列轮询定时器（3s）
+        let docPollErrors = 0;       // 文档轮询连续失败计数
+        let taskPollErrors = 0;      // 任务轮询连续失败计数
+
+        /* ═══════════════ 工具函数 ═══════════════ */
+
+        function escHTML(str) {
+            const div = document.createElement('div');
+            div.textContent = str;
+            return div.innerHTML;
+        }
+        // 字节数 → 可读大小（KB/MB）
+        function formatSize(bytes) {
+            if (bytes >= 1024 * 1024) return (bytes / 1024 / 1024).toFixed(1) + ' MB';
+            return (bytes / 1024).toFixed(1) + ' KB';
+        }
+
+        /* ═══════════════ 视图一：知识库列表 ═══════════════ */
+
+        function buildListUrl(page) {
+            const params = new URLSearchParams({ page, page_size: PAGE_SIZE });
+            if (currentKeyword) params.set('keyword', currentKeyword);
+            return `${API}/kb?${params.toString()}`;
+        }
+
+        // 渲染列表。点击整个条目进入详情视图。
+        function renderItems(items, mode) {
+            const list = document.getElementById('kb-list');
+            if (mode !== 'append') list.innerHTML = '';
+
+            items.forEach(kb => {
+                const li = document.createElement('li');
+                li.className = 'kb-item';
+                li.onclick = () => openDocView(kb);
+                li.innerHTML = `
+                    <div>
+                        <div class="kb-name">${escHTML(kb.name)} <span style="color:#1677ff;font-size:12px;">[${kb.doc_count} 文档]</span></div>
+                        ${kb.description ? `<div class="kb-desc">${escHTML(kb.description)}</div>` : ''}
+                        <div class="kb-meta">分块: ${kb.chunk_size} | 重叠: ${kb.chunk_overlap} | 创建: ${kb.created_at || ''}</div>
+                    </div>
+                    <div class="btn-actions" onclick="event.stopPropagation()">
+                        <button class="btn btn-primary btn-sm" onclick="openRename('${kb.kb_id}','${escHTML(kb.name)}')">改名</button>
+                        <button class="btn btn-danger btn-sm" onclick="deleteKB('${kb.kb_id}')">删除</button>
+                    </div>
+                `;
+                list.appendChild(li);
+            });
+        }
+
+        async function loadKBs() {
+            currentKeyword = document.getElementById('search-input').value.trim();
+            currentPage = 1;
+            await fetchPage(currentPage, 'reset');
+        }
+        async function loadMoreKBs() {
+            currentPage += 1;
+            await fetchPage(currentPage, 'append');
+        }
+        async function collapseKBs() {
+            currentPage = 1;
+            await fetchPage(currentPage, 'reset');
+        }
+
+        async function fetchPage(page, mode) {
+            const resp = await fetch(buildListUrl(page));
+            const data = await resp.json();
+            const items = data.items;
+            totalCount = data.total;
+            const empty = document.getElementById('empty-state');
+
+            document.getElementById('kb-count').textContent = `共 ${totalCount} 个知识库`;
+
+            if (mode !== 'append' && items.length === 0) {
+                empty.style.display = 'block';
+                document.getElementById('empty-title').textContent =
+                    currentKeyword ? '没有匹配的知识库' : '暂无知识库';
+                document.getElementById('load-more-btn').style.display = 'none';
+                document.getElementById('collapse-btn').style.display = 'none';
+                return;
+            }
+            empty.style.display = 'none';
+            renderItems(items, mode);
+
+            const loaded = document.querySelectorAll('#kb-list .kb-item').length;
+            document.getElementById('load-more-btn').style.display =
+                loaded < totalCount ? 'inline-block' : 'none';
+            document.getElementById('collapse-btn').style.display =
+                currentPage > 1 ? 'inline-block' : 'none';
+        }
+
+        // 创建知识库
+        function openCreateModal() {
+            document.getElementById('create-overlay').classList.add('active');
+            document.getElementById('kb-name').focus();
+        }
+        function closeCreateModal(e) {
+            if (e && e.target !== document.getElementById('create-overlay')) return;
+            document.getElementById('create-overlay').classList.remove('active');
+            document.getElementById('create-error').style.display = 'none';
+        }
+        async function createKB() {
+            const name = document.getElementById('kb-name').value.trim();
+            const desc = document.getElementById('kb-desc').value.trim();
+            const errorEl = document.getElementById('create-error');
+
+            if (!name) {
+                errorEl.textContent = '名称不能为空';
+                errorEl.style.display = 'block';
+                return;
+            }
+            const chunkConfig = readChunkConfig('kb');
+            const resp = await fetch(`${API}/kb`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    name,
+                    description: desc || null,
+                    chunk_size: chunkConfig.chunk_size,
+                    chunk_overlap: chunkConfig.chunk_overlap,
+                    chunk_strategy: document.getElementById('kb-chunk-strategy').value,
+                    chunk_config: chunkConfig,
+                })
+            });
+            if (resp.ok) {
+                closeCreateModal();
+                document.getElementById('kb-name').value = '';
+                document.getElementById('kb-desc').value = '';
+                errorEl.style.display = 'none';
+                loadKBs();
+            } else {
+                const data = await resp.json();
+                errorEl.textContent = data.detail?.message || data.detail || '创建失败';
+                errorEl.style.display = 'block';
+            }
+        }
+
+        // 改名
+        function openRename(kbId, currentName) {
+            renameTargetId = kbId;
+            document.getElementById('rename-input').value = currentName;
+            document.getElementById('rename-error').style.display = 'none';
+            document.getElementById('rename-overlay').classList.add('active');
+            document.getElementById('rename-input').focus();
+        }
+        function closeRename(e) {
+            if (e && e.target !== document.getElementById('rename-overlay')) return;
+            document.getElementById('rename-overlay').classList.remove('active');
+            document.getElementById('rename-error').style.display = 'none';
+        }
+        async function renameKB() {
+            const newName = document.getElementById('rename-input').value.trim();
+            const errorEl = document.getElementById('rename-error');
+            if (!newName) {
+                errorEl.textContent = '名称不能为空';
+                errorEl.style.display = 'block';
+                return;
+            }
+            const resp = await fetch(`${API}/kb/${renameTargetId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name: newName })
+            });
+            if (resp.ok) closeRename();
+            else {
+                const data = await resp.json();
+                errorEl.textContent = data.detail?.message || data.detail || '修改失败';
+                errorEl.style.display = 'block';
+            }
+            loadKBs();
+        }
+
+        // 删除知识库
+        async function deleteKB(kbId) {
+            if (!confirm('确定要删除这个知识库吗？其下文档也会一并删除')) return;
+            const resp = await fetch(`${API}/kb/${kbId}`, { method: 'DELETE' });
+            if (resp.ok) loadKBs();
+            else alert('删除失败');
+        }
+
+        /* ═══════════════ 分块配置（Advanced RAG 第 1 期） ═══════════════ */
+
+        // 与后端 chunking.DEFAULT_CONFIG 一致：\n 由后端还原为换行，末尾自动补字符级兜底
+        const DEFAULT_SEPARATOR_TEXT = '\\n\\n|\\n|。|！|？|；|.';
+
+        // 读取表单里的分块配置（prefix: 'kb' 建库弹窗 / 'cc' 配置弹窗）
+        function readChunkConfig(prefix) {
+            const el = id => document.getElementById(`${prefix}-${id}`);
+            const sepText = el('chunk-separators').value.trim();
+            const config = {
+                separators: sepText || DEFAULT_SEPARATOR_TEXT,
+                chunk_size: parseInt(el('chunk-size').value) || 800,
+                chunk_overlap: parseInt(el('chunk-overlap').value) || 0,
+                length_mode: el('chunk-length-mode').value,
+                keep_separator: el('chunk-keep-sep').checked,
+                filter_whitespace: el('chunk-filter-ws').checked,
+                short_chunk_policy: el('chunk-short-policy').value,
+                min_length: parseInt(el('chunk-min-length').value) || 0,
+            };
+            const strategyEl = el('chunk-strategy');
+            const strategy = strategyEl ? strategyEl.value : 'general';
+            config.strategy = strategy;
+            if (strategy === 'parent_child') {
+                const parentSep = (el('parent-separators').value || '').trim();
+                config.parent = {
+                    separators: parentSep || '\\n\\n|\\n',
+                    chunk_size: parseInt(el('parent-size').value) || 2000,
+                    keep_separator: el('parent-keep-sep').checked,
+                };
+                // 子块参数显式提交，不依赖后端对扁平字段的兜底推导
+                config.child = {
+                    separators: config.separators,
+                    chunk_size: config.chunk_size,
+                    chunk_overlap: config.chunk_overlap,
+                    length_mode: config.length_mode,
+                    keep_separator: config.keep_separator,
+                    filter_whitespace: config.filter_whitespace,
+                    short_chunk_policy: config.short_chunk_policy,
+                    min_length: config.min_length,
+                };
+            }
+            return config;
+        }
+
+        // 把配置回填到表单（分隔符数组转回可编辑文本，换行显示为 \n，空串兜底不展示）
+        function fillChunkConfig(prefix, config) {
+            const el = id => document.getElementById(`${prefix}-${id}`);
+            const set = (id, value) => { const node = el(id); if (node) node.value = value; };
+            config = config || {};
+            const strategyEl = el('chunk-strategy');
+            if (strategyEl) strategyEl.value = config.strategy || 'general';
+
+            // 父子分块时，弹窗里的"分隔符/最大长度/重叠/短块策略"是**子块**参数
+            const child = (config.strategy === 'parent_child' && config.child) ? config.child : config;
+            set('chunk-size', child.chunk_size);
+            set('chunk-overlap', child.chunk_overlap);
+            set('chunk-separators', (child.separators || [])
+                .filter(s => s !== '')
+                .map(s => s.replace(/\n/g, '\\n'))
+                .join('|'));
+            set('chunk-length-mode', child.length_mode);
+            set('chunk-short-policy', child.short_chunk_policy);
+            set('chunk-min-length', child.min_length);
+            el('chunk-keep-sep').checked = !!child.keep_separator;
+            el('chunk-filter-ws').checked = !!child.filter_whitespace;
+
+            const parent = (config.strategy === 'parent_child' && config.parent) ? config.parent : {};
+            set('parent-size', parent.chunk_size || 2000);
+            set('parent-separators', (parent.separators || ['\n\n', '\n'])
+                .filter(s => s !== '')
+                .map(s => s.replace(/\n/g, '\\n'))
+                .join('|'));
+            const parentKeep = el('parent-keep-sep');
+            if (parentKeep) parentKeep.checked = parent.keep_separator !== false;
+            toggleParentFields(prefix);
+        }
+
+        function toggleParentFields(prefix) {
+            const el = id => document.getElementById(`${prefix}-${id}`);
+            const strategyEl = el('chunk-strategy');
+            const box = document.getElementById(`${prefix}-parent-fields`);
+            if (!strategyEl || !box) return;
+            box.style.display = strategyEl.value === 'parent_child' ? 'block' : 'none';
+        }
+
+        function chunkConfigSummary(config) {
+            if (!config) return '';
+            const mode = config.length_mode === 'token' ? 'Token' : '字符';
+            const policy = { keep: '保留', merge: '并入相邻块', drop: '丢弃' }[config.short_chunk_policy] || config.short_chunk_policy;
+            const count = (config.separators || []).filter(s => s !== '').length;
+            if (config.strategy === 'parent_child') {
+                const parent = config.parent || {};
+                const child = config.child || config;
+                const pmode = parent.length_mode === 'token' ? 'Token' : '字符';
+                return `策略: 父子分块 | 父块: ${parent.chunk_size} ${pmode}（保留分隔符: ${parent.keep_separator !== false ? '是' : '否'}）`
+                     + ` | 子块: ${child.chunk_size} ${mode} / 重叠 ${child.chunk_overlap}`
+                     + ` | 子块分隔符: ${count} 个 | 短块(<${child.min_length}): ${policy}`;
+            }
+            return `策略: 通用分块 | 最大长度: ${config.chunk_size} ${mode} | 重叠: ${config.chunk_overlap}`
+                 + ` | 分隔符: ${count} 个 | 短块(<${config.min_length}): ${policy}`;
+        }
+
+        async function loadChunkConfig() {
+            const resp = await fetch(`${API}/kb/${currentKB.kb_id}/chunk-config`);
+            if (!resp.ok) {
+                document.getElementById('doc-kb-config').textContent = '分块配置加载失败';
+                return null;
+            }
+            const data = (await resp.json()).data;
+            currentKB.chunkConfig = data.config;
+            currentKB.chunkConfigMeta = data;
+            document.getElementById('doc-kb-config').textContent = chunkConfigSummary(data.config);
+            return data;
+        }
+
+        function openChunkConfigModal() {
+            if (!currentKB || !currentKB.chunkConfig) { alert('分块配置尚未加载完成，请稍后重试'); return; }
+            fillChunkConfig('cc', currentKB.chunkConfig);
+            document.getElementById('cc-chunk-strategy').value = currentKB.chunkConfig.strategy || 'general';
+            const docs = currentKB.chunkConfigMeta ? currentKB.chunkConfigMeta.doc_count : 0;
+            document.getElementById('cc-hint').textContent = docs > 0
+                ? `该知识库已有 ${docs} 篇文档：为避免新旧索引混用，保存时会先展示新旧配置对比；`
+                  + '确认切换后这些文档会标记为"需重新索引"，点顶部「重新索引」按新配置重建'
+                : '该知识库还没有文档，修改后立即生效';
+            document.getElementById('cc-error').style.display = 'none';
+            document.getElementById('chunk-config-overlay').classList.add('active');
+        }
+        function closeChunkConfigModal(e) {
+            if (e && e.target !== document.getElementById('chunk-config-overlay')) return;
+            document.getElementById('chunk-config-overlay').classList.remove('active');
+        }
+        function resetChunkConfig() {
+            fillChunkConfig('cc', {
+                chunk_size: 800, chunk_overlap: 100, separators: [], length_mode: 'char',
+                keep_separator: false, filter_whitespace: true, short_chunk_policy: 'keep', min_length: 0,
+            });
+        }
+        async function saveChunkConfig() {
+            const errorEl = document.getElementById('cc-error');
+            const resp = await fetch(`${API}/kb/${currentKB.kb_id}/chunk-config`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ chunk_config: readChunkConfig('cc') }),
+            });
+            const data = await resp.json().catch(() => ({}));
+            if (resp.ok) {
+                closeChunkConfigModal();
+                await loadChunkConfig();
+                alert('分块配置已更新');
+                return;
+            }
+            const detail = data.detail || {};
+            let msg = detail.message || detail || '保存失败';
+            if (resp.status === 409 && detail.old_config) {
+                msg += `\n\n旧配置: ${chunkConfigSummary(detail.old_config)}`
+                     + `\n新配置: ${chunkConfigSummary(detail.new_config)}`;
+            }
+            errorEl.textContent = msg;
+            errorEl.style.display = 'block';
+
+            // 有文档时：按需求 2.3 先展示旧/新配置，再由用户确认是否切换并重新索引
+            if (resp.status === 409 && detail.requires_reindex) {
+                if (confirm(msg + '\n\n是否现在切换配置？切换后需要重新索引，旧索引不会被直接混用。')) {
+                    const confirmed = await fetch(`${API}/kb/${currentKB.kb_id}/chunk-config`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ chunk_config: readChunkConfig('cc'), switch_and_reindex: true }),
+                    });
+                    const confirmedData = await confirmed.json().catch(() => ({}));
+                    if (!confirmed.ok) {
+                        errorEl.textContent = confirmedData.detail?.message || '切换失败';
+                        return;
+                    }
+                    closeChunkConfigModal();
+                    await loadChunkConfig();
+                    await loadIndexStatus();
+                    const pending = confirmedData.data.docs_to_reindex || 0;
+                    const retargeted = confirmedData.data.docs_retargeted || 0;
+                    alert(`配置已切换。` + (pending ? `有 ${pending} 篇文档需要重新索引。` : '')
+                        + (retargeted ? `另有 ${retargeted} 个排队任务已改用新配置。` : ''));
+                }
+            }
+        }
+
+        /* ═══════════════ 检索策略（Advanced RAG 第 3 期） ═══════════════ */
+
+        function fillStrategyForm(config) {
+            const set = (id, value) => { const el = document.getElementById(id); if (el) el.value = value; };
+            const check = (id, value) => { const el = document.getElementById(id); if (el) el.checked = !!value; };
+            set('st-mode', config.mode || 'basic');
+            check('st-rewrite', config.enable_rewrite);
+            check('st-multi', config.enable_multi_query);
+            set('st-multi-count', config.multi_query_count);
+            check('st-hyde', config.enable_hyde);
+            set('st-fusion', config.fusion_method || 'rrf');
+            set('st-dense', config.dense_weight);
+            set('st-sparse', config.sparse_weight);
+            check('st-index', config.enable_index);
+            set('st-per-path', config.per_path_k);
+            set('st-cap', config.total_candidate_cap);
+            check('st-rerank', config.enable_rerank);
+            set('st-topn', config.rerank_top_n);
+            set('st-minscore', config.min_score);
+            set('st-maxcontext', config.max_context_chars);
+            // 弹窗顶部的小字：当前实际生效的模式（保存后对后续问答生效）
+            const hintEl = document.getElementById('st-hint');
+            if (hintEl) hintEl.textContent = '当前生效：' + strategySummary(config);
+        }
+
+        // 勾选任一高级能力时自动切到高级模式：
+        // 高级能力只在高级模式下生效，否则用户"勾了改写却没反应"，会以为开关坏了。
+        function syncStrategyMode() {
+            const anyAbility = ['st-rewrite', 'st-multi', 'st-hyde']
+                .some(id => document.getElementById(id).checked);
+            const modeEl = document.getElementById('st-mode');
+            const hintEl = document.getElementById('st-hint');
+            if (anyAbility && modeEl.value !== 'advanced') {
+                modeEl.value = 'advanced';
+                if (hintEl) hintEl.textContent = '已自动切换为「高级模式」：改写/多查询/HyDE 只在高级模式下生效';
+            }
+        }
+
+        // 一行式策略摘要（弹窗小字用；问答页回答下方的小字是同一套口径）
+        function strategySummary(config) {
+            if (!config) return '未知';
+            const topN = (config.rerank_top_n != null) ? config.rerank_top_n : '-';
+            // 索引问题召回在两种模式下都可能生效，摘要里必须如实体现（否则"关没关"看不出来）
+            const indexText = config.enable_index === false ? '索引问题召回: 关' : '索引问题召回: 开';
+            if (config.mode !== 'advanced') {
+                return '基础模式（原问题 + ' + indexText + '）· 融合 ' + (config.fusion_method || 'rrf')
+                    + ' · 保留 ' + topN + ' 条';
+            }
+            const features = [];
+            if (config.enable_rewrite) features.push('问题改写');
+            if (config.enable_multi_query) features.push('多查询×' + (config.multi_query_count || 1));
+            if (config.enable_hyde) features.push('HyDE');
+            return '高级模式 · 融合 ' + (config.fusion_method || 'rrf')
+                + ' · 能力 ' + (features.length ? features.join('+') : '未启用')
+                + ' · ' + indexText
+                + ' · 保留 ' + topN + ' 条';
+        }
+
+        function readStrategyForm() {
+            const val = id => document.getElementById(id);
+            return {
+                mode: val('st-mode').value,
+                enable_rewrite: val('st-rewrite').checked,
+                enable_multi_query: val('st-multi').checked,
+                multi_query_count: parseInt(val('st-multi-count').value) || 3,
+                enable_hyde: val('st-hyde').checked,
+                fusion_method: val('st-fusion').value,
+                dense_weight: parseFloat(val('st-dense').value),
+                sparse_weight: parseFloat(val('st-sparse').value),
+                enable_index: val('st-index').checked,
+                per_path_k: parseInt(val('st-per-path').value) || 20,
+                total_candidate_cap: parseInt(val('st-cap').value) || 60,
+                enable_rerank: val('st-rerank').checked,
+                rerank_top_n: parseInt(val('st-topn').value) || 5,
+                min_score: parseFloat(val('st-minscore').value) || 0,
+                max_context_chars: parseInt(val('st-maxcontext').value) || 6000,
+            };
+        }
+
+        async function openStrategyModal() {
+            const resp = await fetch(`${API}/kb/${currentKB.kb_id}/retrieval-strategy`);
+            if (!resp.ok) { alert('读取检索策略失败'); return; }
+            const data = (await resp.json()).data;
+            currentKB.strategyMeta = data;
+            fillStrategyForm(data.strategy);
+            document.getElementById('st-error').style.display = 'none';
+            document.getElementById('strategy-overlay').classList.add('active');
+        }
+        function closeStrategyModal(e) {
+            if (e && e.target !== document.getElementById('strategy-overlay')) return;
+            document.getElementById('strategy-overlay').classList.remove('active');
+        }
+        async function saveStrategy() {
+            const errorEl = document.getElementById('st-error');
+            const resp = await fetch(`${API}/kb/${currentKB.kb_id}/retrieval-strategy`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ strategy: readStrategyForm() }),
+            });
+            const data = await resp.json().catch(() => ({}));
+            if (!resp.ok) {
+                errorEl.textContent = data.detail?.message || data.detail || '保存失败';
+                errorEl.style.display = 'block';
+                return;
+            }
+            currentKB.strategyMeta = data.data;
+            renderDetailSummary();
+            closeStrategyModal();
+            alert('检索策略已更新（只影响后续请求）');
+        }
+        async function resetStrategy() {
+            const resp = await fetch(`${API}/kb/${currentKB.kb_id}/retrieval-strategy/reset`, { method: 'POST' });
+            if (!resp.ok) { alert('恢复默认失败'); return; }
+            const data = (await resp.json()).data;
+            currentKB.strategyMeta = data;
+            fillStrategyForm(data.strategy);
+            renderDetailSummary();
+            alert('已恢复默认检索策略');
+        }
+
+        /* ═══════════════ 索引状态与重新索引（Advanced RAG 第 2 期） ═══════════════ */
+
+        async function loadIndexStatus() {
+            const resp = await fetch(`${API}/kb/${currentKB.kb_id}/index-status`);
+            if (!resp.ok) return null;
+            const data = (await resp.json()).data;
+            currentKB.indexStatus = data;
+            currentKB.docIndexStatus = (data.items || []).reduce((acc, item) => {
+                acc[item.doc_id] = item;
+                return acc;
+            }, {});
+            renderDetailSummary();
+            return data;
+        }
+
+        function renderDetailSummary() {
+            if (!currentKB) return;
+            const parts = [];
+            if (currentKB.chunkConfig) parts.push(chunkConfigSummary(currentKB.chunkConfig));
+            if (currentKB.indexStatus) {
+                const s = currentKB.indexStatus;
+                parts.push(s.outdated_count > 0
+                    ? `索引状态: ${s.outdated_count}/${s.doc_count} 篇待重新索引`
+                    : '索引状态: 全部与当前分块配置一致');
+            }
+            if (currentKB.strategyMeta) {
+                const st = currentKB.strategyMeta.strategy || {};
+                const features = [];
+                if (st.enable_rewrite) features.push('改写');
+                if (st.enable_multi_query) features.push('多查询x' + st.multi_query_count);
+                if (st.enable_hyde) features.push('HyDE');
+                parts.push(`检索策略: ${st.mode === 'advanced' ? '高级模式' : '基础模式'}`
+                    + ` | 融合: ${st.fusion_method}`
+                    + ` | 高级能力: ${features.length ? features.join(' / ') : '未启用'}`);
+            }
+            document.getElementById('doc-kb-config').textContent = parts.join('　｜　');
+
+            const btn = document.getElementById('btn-reindex');
+            const outdated = currentKB.indexStatus ? currentKB.indexStatus.outdated_count : 0;
+            if (btn) {
+                btn.style.display = outdated > 0 ? 'inline-block' : 'none';
+                btn.textContent = `重新索引（${outdated} 篇）`;
+            }
+        }
+
+        async function reindexAll() {
+            if (!confirm('将对所有"配置已过期"的文档重建索引（重切分块 + 重写向量）。继续？')) return;
+            await _submitReindex({});
+        }
+        async function reindexDoc(docId) {
+            if (!confirm('重新索引这篇文档？将按当前分块配置重建分块与向量。')) return;
+            await _submitReindex({ doc_ids: [docId] });
+        }
+        async function _submitReindex(body) {
+            const resp = await fetch(`${API}/kb/${currentKB.kb_id}/reindex`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body),
+            });
+            const data = await resp.json().catch(() => ({}));
+            if (!resp.ok) { alert(data.detail?.message || data.detail || '重新索引失败'); return; }
+            const result = data.data;
+            let msg = `已提交 ${result.submitted} 篇文档重新索引`;
+            if (result.skipped && result.skipped.length) {
+                msg += `\n跳过 ${result.skipped.length} 篇：${result.skipped[0].reason}`;
+            }
+            alert(msg);
+            await loadIndexStatus();
+            loadDocuments();
+            loadKBs();
+            startDocStatusPolling();
+        }
+
+        /* ═══════════════ 视图二：知识库详情（文档管理） ═══════════════ */
+
+        // 进入详情视图：隐藏列表，显示文档列表
+        async function openDocView(kb) {
+            currentKB = kb;
+            stopDocStatusPolling();  // Ch10: 切换 KB 前先停掉旧轮询
+            stopTaskPolling();
+            document.getElementById('kb-view').style.display = 'none';
+            document.getElementById('doc-view').style.display = 'block';
+            document.getElementById('doc-kb-title').textContent = kb.name;
+            document.getElementById('doc-kb-meta').textContent =
+                `ID: ${kb.kb_id} | 分块: ${kb.chunk_size} | 重叠: ${kb.chunk_overlap}`;
+            document.getElementById('doc-kb-config').textContent = '配置加载中...';
+            // 并行拉取分块配置、索引状态、检索策略，再渲染汇总与文档列表
+            await Promise.all([
+                loadChunkConfig(),      // 当前使用的分块配置（第 1 期）
+                loadIndexStatus(),      // 索引是否与配置一致（第 2 期）
+                loadStrategySummary(),  // 当前检索策略（第 3 期）
+            ]);
+            renderDetailSummary();
+            loadDocuments();
+        }
+
+        async function loadStrategySummary() {
+            const resp = await fetch(`${API}/kb/${currentKB.kb_id}/retrieval-strategy`);
+            if (resp.ok) currentKB.strategyMeta = (await resp.json()).data;
+        }
+        // 从 URL 的 ?kb_id= 直接进入该知识库详情（从问答页/观测页切回来时保持上下文）
+        async function openKbFromUrl() {
+            // 优先用 URL 上的 kb_id；带 &open=1 但没带 id 时回落到最近打开的知识库
+            const kbId = new URLSearchParams(location.search).get('kb_id');
+            if (!kbId) return;
+            try {
+                const resp = await fetch(`${API}/kb/${kbId}`);
+                if (!resp.ok) return;   // 无权限或已删除：留在列表页
+                const kb = (await resp.json()).data;
+                if (kb) openDocView(kb);
+            } catch (e) {
+                // 忽略：留在列表页即可
+            }
+        }
+
+        function backToList() {
+            // 回到列表时清掉 URL 上的 kb_id，避免刷新又被拉回详情
+            if (location.search.includes('kb_id=')) {
+                history.replaceState(null, '', location.pathname);
+            }
+            currentKB = null;
+            document.getElementById('doc-view').style.display = 'none';
+            document.getElementById('kb-view').style.display = 'block';
+            stopDocStatusPolling();  // Ch10: 停止文档状态轮询
+            stopTaskPolling();       // Ch10: 停止任务轮询
+            loadKBs(); // 返回时刷新列表，可能文档数有变化
+        }
+
+        // 文档列表
+        async function loadDocuments() {
+            const resp = await fetch(`${API}/documents?kb_id=${currentKB.kb_id}`);
+            const data = await resp.json();
+            const items = data.data.items;
+            const list = document.getElementById('doc-list');
+            const empty = document.getElementById('doc-empty');
+            list.innerHTML = '';
+
+            if (items.length === 0) {
+                empty.style.display = 'block';
+                return;
+            }
+            empty.style.display = 'none';
+
+            // Ch10：状态标签映射（task_status 由后端关联上传任务得到）
+            const statusLabel = { uploaded: '等待处理', dispatch_unknown: '待确认', parsing: '解析中', indexing: '向量化中', completed: '已完成', failed: '失败' };
+            // 第 2 期：索引状态（父块/子块数、配置是否过期、是否重试过）
+            const indexStatus = currentKB.docIndexStatus || {};
+            items.forEach(doc => {
+                const li = document.createElement('li');
+                li.className = 'doc-item';
+                const status = doc.task_status || 'completed';
+                const label = statusLabel[status] || status;
+                const idx = indexStatus[doc.doc_id] || {};
+                const outdated = !!idx.config_outdated;
+                const parentChild = (idx.parent_count || 0) > 0;
+                const chunkInfo = (idx.chunk_count || 0) > 0
+                    ? `<div class="doc-meta">分块: ${idx.chunk_count} 个可检索块`
+                      + (parentChild ? `（父块 ${idx.parent_count} / 子块 ${idx.child_count}）` : '')
+                      + (idx.task && idx.task.retry_count ? ` | 重试 ${idx.task.retry_count} 次` : '')
+                      + '</div>'
+                    : '';
+                li.innerHTML = `
+                    <div>
+                        <div class="doc-name">${escHTML(doc.filename)}
+                            <span class="doc-status ${status}">${label}</span>
+                            ${outdated ? '<span class="doc-status failed">需重新索引</span>' : ''}
+                        </div>
+                        <div class="doc-meta">大小: ${formatSize(doc.file_size)} | 上传: ${doc.created_at || ''}
+                            ${doc.task_step_message ? ` | ${escHTML(doc.task_step_message)}` : ''}
+                        </div>
+                        ${chunkInfo}
+                    </div>
+                    <div class="doc-actions">
+                        ${outdated ? `<button class="btn btn-build btn-sm" onclick="reindexDoc('${doc.doc_id}')">重新索引</button>` : ''}
+                        <button class="btn btn-preview btn-sm" onclick="openPreview('${doc.doc_id}','${escHTML(doc.filename)}')">预览分块</button>
+                        <button class="btn btn-danger btn-sm" onclick="deleteDocument('${doc.doc_id}')">删除</button>
+                    </div>
+                `;
+                list.appendChild(li);
+            });
+        }
+
+        // 上传文档（用 FormData，浏览器自动设置 multipart boundary）
+        function openUploadModal() {
+            document.getElementById('upload-file').value = '';
+            document.getElementById('upload-error').style.display = 'none';
+            document.getElementById('upload-preview-body').innerHTML = '';
+            // 展示知识库当前分块配置（只读；预览与入库都按它执行）
+            if (currentKB) {
+                const cfg = currentKB.chunkConfig || {};
+                document.getElementById('up-chunk-size').value = cfg.chunk_size ?? currentKB.chunk_size ?? 800;
+                document.getElementById('up-chunk-overlap').value = cfg.chunk_overlap ?? currentKB.chunk_overlap ?? 100;
+            }
+            document.getElementById('upload-overlay').classList.add('active');
+        }
+        function closeUploadModal(e) {
+            if (e && e.target !== document.getElementById('upload-overlay')) return;
+            document.getElementById('upload-overlay').classList.remove('active');
+            document.getElementById('upload-error').style.display = 'none';
+        }
+        function clearUploadError() {
+            document.getElementById('upload-error').style.display = 'none';
+            document.getElementById('upload-preview-body').innerHTML = '';
+        }
+        // 上传前预览分块（不落库）
+        async function previewUploadFile() {
+            const fileInput = document.getElementById('upload-file');
+            const bodyEl = document.getElementById('upload-preview-body');
+            if (!fileInput.files.length) {
+                document.getElementById('upload-error').textContent = '请先选择文件';
+                document.getElementById('upload-error').style.display = 'block';
+                return;
+            }
+            const formData = new FormData();
+            formData.append('file', fileInput.files[0]);
+            // 只传 kb_id：由后端按知识库当前分块配置预览，保证与入库结果一致
+            formData.append('kb_id', currentKB.kb_id);
+            bodyEl.innerHTML = '<p style="font-size:13px;color:#999;">解析中...</p>';
+            try {
+                const resp = await fetch(`${API}/documents/preview`, { method: 'POST', body: formData });
+                if (!resp.ok) {
+                    const d = await resp.json().catch(() => ({}));
+                    throw new Error(d.detail?.message || d.detail || '预览失败');
+                }
+                const data = (await resp.json()).data;
+                // 与文档行「预览分块」弹窗保持同一口径：长度按配置口径，同时给出字符数
+                const cfg = data.config || {};
+                const mode = cfg.length_mode === 'token' ? 'Token' : '字符';
+                const tag = data.overridden ? '（本次为临时覆盖参数）' : '（与入库配置一致）';
+                bodyEl.innerHTML = `<p style="font-size:12px;color:#722ed1;margin-bottom:6px;">
+                    共 ${data.total_chunks} 块（最大 ${data.chunk_size} ${mode} / 重叠 ${data.chunk_overlap}）${tag}</p>` +
+                    data.chunks.map(c => `
+                        <div class="chunk-item">
+                            <div class="chunk-header">
+                                <span class="chunk-index">#${c.chunk_index + 1} 块</span>
+                                <span class="chunk-chars">${c.length} ${mode} / ${c.chars} 字符</span>
+                            </div>
+                            <div class="chunk-content">${escHTML(c.content)}</div>
+                        </div>`).join('');
+            } catch (err) {
+                bodyEl.innerHTML = `<p style="font-size:13px;color:#ff4d4f;">${escHTML(err.message)}</p>`;
+            }
+        }
+        async function uploadDocument() {
+            const fileInput = document.getElementById('upload-file');
+            const errorEl = document.getElementById('upload-error');
+            if (!fileInput.files.length) {
+                errorEl.textContent = '请先选择文件';
+                errorEl.style.display = 'block';
+                return;
+            }
+            /* 【易错】文件上传必须用 FormData，不能用 JSON.stringify。
+               fetch 不手动设 Content-Type，浏览器会自动加 multipart/form-data 和 boundary。 */
+            const formData = new FormData();
+            formData.append('kb_id', currentKB.kb_id);
+            formData.append('file', fileInput.files[0]);
+
+            try {
+                const resp = await fetch(`${API}/documents/upload`, { method: 'POST', body: formData });
+                if (!resp.ok) {
+                    const data = await resp.json().catch(() => ({}));
+                    throw new Error(data.detail?.message || data.detail || '上传失败');
+                }
+                closeUploadModal();
+                switchTab('documents');   // Ch10: 切换到文档 tab
+                loadDocuments();          // 重新拉文档列表（含任务状态）
+                startDocStatusPolling();  // Ch10: 启动状态轮询
+                loadKBs();
+            } catch (error) {
+                errorEl.textContent = error.message || '上传失败，请检查网络连接';
+                errorEl.style.display = 'block';
+            }
+        }
+
+        // 删除文档
+        async function deleteDocument(docId) {
+            // Ch10：删除会级联取消处理中的任务，提示用户
+            if (!confirm('确定要删除这个文档吗？正在处理的任务也将被取消。')) return;
+            const resp = await fetch(`${API}/documents/${docId}`, { method: 'DELETE' });
+            if (resp.ok) {
+                loadDocuments();
+                loadKBs();
+                loadTasks();  // Ch10: 刷新任务列表
+            } else {
+                const data = await resp.json().catch(() => ({}));
+                alert(data.detail?.message || data.detail || '删除失败');
+            }
+        }
+
+        // 分块预览：默认按知识库当前分块配置预览，可在弹窗里临时改大小/重叠后"重新预览"
+        async function openPreview(docId, filename) {
+            previewDocId = docId;
+            previewDocName = filename;
+            const cfg = currentKB.chunkConfig || {};
+            document.getElementById('pv-chunk-size').value = cfg.chunk_size ?? currentKB.chunk_size ?? 800;
+            document.getElementById('pv-chunk-overlap').value = cfg.chunk_overlap ?? currentKB.chunk_overlap ?? 100;
+            document.getElementById('preview-title').textContent = `分块预览 - ${filename}`;
+            document.getElementById('preview-body').innerHTML = '<p>加载中...</p>';
+            document.getElementById('preview-overlay').classList.add('active');
+            await doPreview(filename);
+        }
+
+        // 读取输入框参数，重新请求分块预览（仅本次临时覆盖，不落库）
+        async function rePreview() {
+            const cs = parseInt(document.getElementById('pv-chunk-size').value) || 800;
+            const co = parseInt(document.getElementById('pv-chunk-overlap').value) || 100;
+            document.getElementById('preview-body').innerHTML = '<p>加载中...</p>';
+            await doPreview(previewDocName, cs, co);
+        }
+
+        async function doPreview(filename, cs = null, co = null) {
+            const cfg = currentKB.chunkConfig || {};
+            const formData = new FormData();
+            // 带上知识库完整配置（分隔符/长度口径/短块策略），只对大小与重叠做临时覆盖，
+            // 这样"预览"与"实际入库"走的是同一套配置与同一段分块代码。
+            formData.append('chunk_config', JSON.stringify(cfg));
+            if (cs !== null && cs !== undefined) formData.append('chunk_size', cs);
+            if (co !== null && co !== undefined) formData.append('chunk_overlap', co);
+
+            try {
+                const resp = await fetch(`${API}/documents/${previewDocId}/preview-chunks`, { method: 'POST', body: formData });
+                if (!resp.ok) {
+                    const d = await resp.json().catch(() => ({}));
+                    throw new Error(d.detail?.message || d.detail || '预览失败');
+                }
+                const payload = (await resp.json()).data;
+                const effective = payload.config || {};
+                const mode = effective.length_mode === 'token' ? 'Token' : '字符';
+                const tag = payload.overridden ? '（本次为临时覆盖参数）' : '（与入库配置一致）';
+                document.getElementById('preview-title').textContent =
+                    `分块预览 - ${filename || ''}（共 ${payload.total_chunks} 块，最大 ${effective.chunk_size} ${mode} / 重叠 ${effective.chunk_overlap}）${tag}`;
+                const parents = payload.parents || [];
+                if (parents.length) {
+                    // 父子分块：展示"父块 → 子块"层级关系（子块进向量库参与检索，父块供上下文生成）
+                    document.getElementById('preview-body').innerHTML =
+                        `<p style="font-size:12px;color:#722ed1;margin-bottom:6px;">
+                            父子分块：父块 ${payload.total_parents} 个 / 可检索子块 ${payload.total_chunks} 个</p>`
+                        + parents.map(p => `
+                            <div class="chunk-item" style="background:#fafafa;border-left:3px solid #722ed1;">
+                                <div class="chunk-header">
+                                    <span class="chunk-index">父块 #${p.chunk_index + 1}</span>
+                                    <span class="chunk-chars">${p.length} ${mode}（含 ${p.children.length} 个子块）· 只存库，用于生成上下文</span>
+                                </div>
+                                <div class="chunk-content" style="max-height:120px;overflow-y:auto;">${escHTML(p.content)}</div>
+                                ${p.children.map(c => `
+                                    <div style="margin:6px 0 0 12px;border-left:2px solid #1677ff;padding-left:8px;">
+                                        <div class="chunk-chars">↳ 子块 #${c.chunk_index + 1}（父块内第 ${c.sense_index + 1} 个）：${c.length} ${mode} / ${c.chars} 字符 · 向量化并参与检索</div>
+                                        <div class="chunk-content">${escHTML(c.content)}</div>
+                                    </div>`).join('')}
+                            </div>`).join('');
+                } else {
+                    document.getElementById('preview-body').innerHTML = payload.chunks.map(c => `
+                        <div class="chunk-item">
+                            <div class="chunk-header">
+                                <span class="chunk-index">第 ${c.chunk_index + 1} 块</span>
+                                <span class="chunk-chars">${c.length} ${mode} / ${c.chars} 字符</span>
+                            </div>
+                            <div class="chunk-content">${escHTML(c.content)}</div>
+                        </div>`).join('');
+                }
+            } catch (e) {
+                document.getElementById('preview-body').innerHTML =
+                    `<p style="color:#ff4d4f;">${escHTML(e.message || '加载分块失败，请检查文档是否存在')}</p>`;
+            }
+        }
+        function closePreview(e) {
+            if (e && e.target !== document.getElementById('preview-overlay')) return;
+            document.getElementById('preview-overlay').classList.remove('active');
+        }
+
+        /* ═══════════════ 召回测试 ═══════════════ */
+
+        // Tab 切换
+        function switchTab(tab) {
+            document.querySelectorAll('.tab-item').forEach(el => el.classList.remove('active'));
+            document.getElementById('tab-documents').style.display = 'none';
+            document.getElementById('tab-recall').style.display = 'none';
+            document.getElementById('tab-index').style.display = 'none';
+            document.getElementById('tab-qa').style.display = 'none';
+            document.getElementById('tab-tasks').style.display = 'none';  // Ch10 新增
+
+            if (tab === 'documents') {
+                document.querySelectorAll('.tab-item')[0].classList.add('active');
+                document.getElementById('tab-documents').style.display = 'block';
+            } else if (tab === 'recall') {
+                document.querySelectorAll('.tab-item')[1].classList.add('active');
+                document.getElementById('tab-recall').style.display = 'block';
+            } else if (tab === 'index') {
+                document.querySelectorAll('.tab-item')[2].classList.add('active');
+                document.getElementById('tab-index').style.display = 'block';
+                loadIndexQuestions();
+            } else if (tab === 'qa') {
+                document.querySelectorAll('.tab-item')[3].classList.add('active');
+                document.getElementById('tab-qa').style.display = 'block';
+            } else if (tab === 'tasks') {  // Ch10 新增：任务队列
+                document.querySelectorAll('.tab-item')[4].classList.add('active');
+                document.getElementById('tab-tasks').style.display = 'block';
+                loadTasks();
+            }
+        }
+
+        // 打开 RAG 问答页面
+        // 默认同标签：知识库 ↔ 问答 是一条线性路径（返回时回到本库详情），
+        // 不会出现"两个知识库页面"或多标签状态不一致的问题。
+        function openQA() {
+            location.href = `/ui/index.html?kb_id=${encodeURIComponent(currentKB.kb_id)}`;
+        }
+
+        // 次要入口：新标签打开问答（用于"边看召回测试/分块配置边问答"的对照场景）。
+        // 同样通过 URL 传 kb_id，不依赖任何本地存储。
+        function openQANewTab() {
+            window.open(`/ui/index.html?kb_id=${encodeURIComponent(currentKB.kb_id)}`, '_blank');
+        }
+
+        /* ═══════════════ Ch10：异步任务轮询与任务队列 ═══════════════ */
+
+        // 文档状态轮询（上传成功后自动启动，全部终态自动停止）
+        function startDocStatusPolling() {
+            stopDocStatusPolling();
+            docPollErrors = 0;
+            docStatusTimer = setInterval(async () => {
+                try {
+                    const resp = await fetch(`${API}/documents?kb_id=${currentKB.kb_id}`);
+                    if (!resp.ok) throw new Error('请求失败');
+                    const result = await resp.json();
+                    loadDocuments();
+                    docPollErrors = 0;
+                    // 全部终态时停止轮询
+                    const items = result.data.items;
+                    const allDone = items.every(d =>
+                        !d.task_status || d.task_status === 'completed' || d.task_status === 'failed'
+                    );
+                    if (allDone) stopDocStatusPolling();
+                } catch (e) {
+                    docPollErrors++;
+                    if (docPollErrors >= 3) {
+                        stopDocStatusPolling();
+                        console.warn('[docPoll] 连续 3 次轮询失败，已停止');
+                    }
+                }
+            }, 2000);
+        }
+
+        function stopDocStatusPolling() {
+            if (docStatusTimer) { clearInterval(docStatusTimer); docStatusTimer = null; }
+        }
+
+        // 任务队列轮询（切换到任务 Tab 时启动，无进行中任务自动停止）
+        function startTaskPolling() {
+            stopTaskPolling();
+            taskPollErrors = 0;
+            taskTimer = setInterval(async () => {
+                try {
+                    await loadTasks();
+                    taskPollErrors = 0;
+                } catch (e) {
+                    taskPollErrors++;
+                    if (taskPollErrors >= 3) {
+                        stopTaskPolling();
+                        console.warn('[taskPoll] 连续 3 次轮询失败，已停止');
+                    }
+                }
+            }, 3000);
+        }
+
+        function stopTaskPolling() {
+            if (taskTimer) { clearInterval(taskTimer); taskTimer = null; }
+        }
+
+        // 统一读取错误信息（detail 可能是字符串或 {message}）
+        async function readErrorMessage(resp, fallback) {
+            try {
+                const data = await resp.json();
+                if (typeof data.detail === 'string') return data.detail;
+                if (data.detail?.message) return data.detail.message;
+                if (data.message) return data.message;
+            } catch (e) {
+                // 非 JSON 响应使用统一兜底文案。
+            }
+            return `${fallback}（HTTP ${resp.status}）`;
+        }
+
+        async function loadTasks() {
+            if (!currentKB) return;
+            try {
+                const resp = await fetch(`${API}/upload-tasks?kb_id=${currentKB.kb_id}`);
+                if (!resp.ok) throw new Error(await readErrorMessage(resp, '加载任务失败'));
+                const result = await resp.json();
+                renderTaskList(result.data.items);
+            } catch (error) {
+                stopTaskPolling();
+                const list = document.getElementById('task-list');
+                const empty = document.getElementById('task-empty');
+                list.innerHTML = '';
+                empty.querySelector('p').textContent = error.message || '加载任务失败，请检查网络连接';
+                empty.style.display = 'block';
+            }
+        }
+
+        function renderTaskList(items) {
+            const list = document.getElementById('task-list');
+            const empty = document.getElementById('task-empty');
+            list.innerHTML = '';
+            if (items.length === 0) { empty.style.display = 'block'; return; }
+            empty.style.display = 'none';
+
+            const statusLabel = { uploaded: '等待处理', dispatch_unknown: '发送结果待确认', parsing: '解析中', indexing: '向量化中', completed: '已完成', failed: '失败' };
+            items.forEach(task => {
+                const li = document.createElement('li');
+                li.className = 'task-item';
+                const status = task.status || 'uploaded';
+                const label = statusLabel[status] || status;
+                const progress = task.progress || 0;
+                li.innerHTML = `
+                    <div class="task-header">
+                        <span class="task-filename">${escHTML(task.filename || '-')}</span>
+                        <span class="task-status ${status}">${label}</span>
+                    </div>
+                    <div class="task-progress-bar">
+                        <div class="task-progress-fill ${status}" style="width:${progress}%"></div>
+                    </div>
+                    <div class="task-step">${escHTML(task.step_message || '')}</div>
+                    ${task.error_message ? `<div class="task-error">${escHTML(task.error_message)}</div>` : ''}
+                    <div class="task-meta">
+                        创建: ${task.created_at || '-'} | 更新: ${task.updated_at || '-'}
+                    </div>
+                    <div class="task-actions">
+                        ${status === 'failed' ? `<button class="btn btn-primary btn-sm" onclick="retryTask('${task.task_id}')">重试</button>` : ''}
+                        ${status === 'completed' || status === 'failed' ? `<button class="btn btn-danger btn-sm" onclick="deleteTask('${task.task_id}')">删除</button>` : ''}
+                    </div>
+                `;
+                list.appendChild(li);
+            });
+
+            // 有进行中的任务时启动轮询
+            const hasActive = items.some(t => ['uploaded', 'dispatch_unknown', 'parsing', 'indexing'].includes(t.status));
+            if (hasActive) startTaskPolling();
+            else stopTaskPolling();
+        }
+
+        async function retryTask(taskId) {
+            try {
+                const resp = await fetch(`${API}/upload-tasks/${taskId}/retry`, { method: 'POST' });
+                if (!resp.ok) throw new Error(await readErrorMessage(resp, '重试失败'));
+                loadTasks();
+                startDocStatusPolling();
+            } catch (error) {
+                alert(error.message || '重试失败，请检查网络连接');
+            }
+        }
+
+        async function deleteTask(taskId) {
+            if (!confirm('确定要删除这条任务记录吗？')) return;
+            try {
+                const resp = await fetch(`${API}/upload-tasks/${taskId}`, { method: 'DELETE' });
+                if (!resp.ok) throw new Error(await readErrorMessage(resp, '删除失败'));
+                loadTasks();
+            } catch (error) {
+                alert(error.message || '删除失败，请检查网络连接');
+            }
+        }
+
+        // 执行召回测试
+        async function runRecall() {
+            const query = document.getElementById('recall-query').value.trim();
+            if (!query) { alert('请输入查询文本'); return; }
+
+            const basicMode = document.getElementById('recall-run-mode').value === 'basic';
+            const payload = {
+                query: query,
+                retrieval_mode: document.getElementById('recall-mode').value,
+                top_k: parseInt(document.getElementById('recall-top-k').value) || 5,
+                candidate_k: parseInt(document.getElementById('recall-candidate-k').value) || 20,
+                min_score: parseFloat(document.getElementById('recall-min-score').value) || 0,
+                dense_weight: parseFloat(document.getElementById('recall-dense-weight').value) || 0.5,
+                sparse_weight: parseFloat(document.getElementById('recall-sparse-weight').value) || 0.5,
+                enable_rerank: document.getElementById('recall-rerank').checked,
+                enable_index: document.getElementById('recall-enable-index').checked,
+                debug: document.getElementById('recall-debug').checked,
+                // 第 3 期：本次请求的临时覆盖（空值/未勾选 = 跟随知识库策略）
+                mode: document.getElementById('recall-run-mode').value || null,
+                fusion_method: document.getElementById('recall-fusion').value || null,
+                // 选了基础模式就不发能力开关：避免"基础模式 + 能力开关"的歧义请求
+                enable_rewrite: (!basicMode && document.getElementById('recall-rewrite').checked) ? true : null,
+                enable_multi_query: (!basicMode && document.getElementById('recall-multi').checked) ? true : null,
+                enable_hyde: (!basicMode && document.getElementById('recall-hyde').checked) ? true : null,
+            };
+            // 问题改写需要对话历史：召回测试没有会话，这里允许手填"上一轮问题"
+            const prevQuestion = (document.getElementById('recall-history')?.value || '').trim();
+            if (prevQuestion) payload.history = [prevQuestion];
+
+            const resp = await fetch(`${API}/kb/${currentKB.kb_id}/recall-test`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+            });
+            const result = await resp.json();
+            if (!resp.ok) {
+                alert(result.detail?.message || result.detail || '检索失败');
+                return;
+            }
+            renderRecallResults(result.data, payload);
+        }
+
+        // 第 3 期：把一次召回的关键过程渲染成摘要（查询计划 / 路径命中 / 融合 / 降级）
+        function buildRecallPlanHtml(data) {
+            const lines = [];
+            const snapshot = data.config_snapshot || {};
+            const mode = snapshot.mode
+                || (data.debug && data.debug.pipeline && data.debug.pipeline.mode) || 'basic';
+            lines.push(`运行模式: <b>${mode === 'advanced' ? '高级模式' : '基础模式'}</b>`
+                + (snapshot.fusion_method ? ` | 融合: ${snapshot.fusion_method}` : '')
+                + (snapshot.rerank_top_n ? ` | 最终保留: ${snapshot.rerank_top_n}` : ''));
+
+            const plan = data.query_plan;
+            if (plan) {
+                if (plan.rewritten) lines.push(`改写后问题: ${escHTML(plan.rewritten)}`);
+                if (plan.multi_queries && plan.multi_queries.length) {
+                    lines.push('扩展问题: ' + plan.multi_queries.map(escHTML).join(' ｜ '));
+                }
+                if (plan.hyde_answer) {
+                    lines.push(`假设答案（仅用于检索，不作为回答）: ${escHTML(plan.hyde_answer)}`);
+                }
+                if (plan.search_paths && plan.search_paths.length) {
+                    lines.push('检索路径: ' + plan.search_paths.map(escHTML).join(' → '));
+                }
+            }
+            const debugPaths = data.debug && data.debug.path_hits;
+            if (debugPaths && Object.keys(debugPaths).length) {
+                lines.push('各路径命中数: ' + Object.keys(debugPaths)
+                    .map(key => `${escHTML(key)}=${debugPaths[key]}`).join('，'));
+            }
+            const fusion = data.fusion || (data.debug && data.debug.fusion);
+            if (fusion && fusion.method) {
+                lines.push(`融合(${fusion.method}): 原始命中 ${fusion.raw_hits} → 去重后 ${fusion.unique_candidates}`
+                    + ` → 保留 ${fusion.kept_candidates}（每路上限 ${fusion.per_path_k}，总量上限 ${fusion.total_candidate_cap}）`);
+            }
+            const degradations = data.degradations
+                || (data.debug && data.debug.query_plan && data.debug.query_plan.degradations) || [];
+            if (degradations.length) {
+                lines.push('<span style="color:#d46b08;">降级: '
+                    + degradations.map(item => `${escHTML(item.stage)}（${escHTML(item.reason)}）→ ${escHTML(item.fallback)}`)
+                        .join('；')
+                    + '</span>');
+            }
+            return lines.join('<br>');
+        }
+
+        /* 召回测试：高级能力只在高级模式下生效。
+           勾任一能力 → 自动把运行模式切到高级模式；显式选基础模式 → 禁用能力并提示（场景 6 的对比用）。 */
+        function syncRecallMode() {
+            const modeEl = document.getElementById('recall-run-mode');
+            const abilityIds = ['recall-rewrite', 'recall-multi', 'recall-hyde'];
+            const anyAbility = abilityIds.some(id => document.getElementById(id).checked);
+            if (anyAbility && !modeEl.value) {
+                modeEl.value = 'advanced';
+            }
+            const basicSelected = modeEl.value === 'basic';
+            abilityIds.forEach(id => { document.getElementById(id).disabled = basicSelected; });
+            const hint = document.getElementById('recall-ability-hint');
+            if (hint) {
+                hint.textContent = basicSelected
+                    ? '已选基础模式：高级能力本次不生效（用于与高级模式对比）'
+                    : (anyAbility ? '本次将按高级模式检索' : '');
+            }
+        }
+
+        // 展开/收起召回结果里的长文本（父块正文可能很长）
+        function toggleRecallBlock(link) {
+            const body = link.previousElementSibling;
+            const collapsed = body.classList.toggle('recall-collapsed');
+            link.textContent = collapsed ? '展开父块正文' : '收起父块正文';
+        }
+
+        // 渲染召回测试结果
+        function renderRecallResults(data, payload) {
+            const resultsEl = document.getElementById('recall-results');
+            const summaryEl = document.getElementById('recall-summary');
+            const debugPanelEl = document.getElementById('recall-debug-panel');
+            const debugGridEl = document.getElementById('recall-debug-grid');
+            const listEl = document.getElementById('recall-result-list');
+
+            resultsEl.style.display = 'block';
+
+            // 第 3 期：展示查询计划、各检索路径命中数、融合前后与降级（验收场景 3/4/5 的证据）
+            let planEl = document.getElementById('recall-plan');
+            if (!planEl) {
+                planEl = document.createElement('div');
+                planEl.id = 'recall-plan';
+                planEl.style.cssText = 'font-size:12px;color:#722ed1;margin-bottom:8px;line-height:1.7;';
+                resultsEl.insertBefore(planEl, resultsEl.firstChild);
+            }
+            planEl.innerHTML = buildRecallPlanHtml(data);
+
+            // Debug 信息：结构化为调试面板展示
+            const hasDebug = data.debug && Object.keys(data.debug).length > 0;
+            const d = hasDebug ? data.debug : {};
+            debugGridEl.replaceChildren();
+            debugPanelEl.style.display = hasDebug ? 'block' : 'none';
+            if (hasDebug) {
+                const show = (value, suffix = '') => (value === null || value === undefined) ? '-' : `${value}${suffix}`;
+                const showBool = value => value === true ? '是' : value === false ? '否' : '-';
+                const debugItems = [
+                    ['检索模式', show(d.pipeline?.retrieval_mode ?? payload.retrieval_mode)],
+                    ['Rerank 配置', showBool(d.pipeline?.enable_rerank)],
+                    ['Rerank 已应用', showBool(d.pipeline?.rerank_applied)],
+                    ['Top K', show(d.config_snapshot?.top_k)],
+                    ['候选 K', show(d.config_snapshot?.candidate_k)],
+                    ['最低分数', show(d.config_snapshot?.min_score)],
+                    ['Dense 权重', show(d.config_snapshot?.dense_weight)],
+                    ['Sparse 权重', show(d.config_snapshot?.sparse_weight)],
+                    ['Milvus 命中', show(d.retrieval?.milvus_hits ?? d.retrieval?.milvus_chunk_hits)],
+                    ['索引命中', show(d.retrieval?.index_question_hits)],
+                    ['索引提升', show(d.retrieval?.index_boosted)],
+                    ['合并后', show(d.retrieval?.after_merge)],
+                    ['过滤后', show(d.retrieval?.after_filter)],
+                    ['耗时', show(d.latency_ms, ' ms')],
+                ];
+                const fragment = document.createDocumentFragment();
+                debugItems.forEach(([label, value]) => {
+                    const itemEl = document.createElement('div');
+                    itemEl.className = 'recall-debug-item';
+                    const labelEl = document.createElement('span');
+                    labelEl.className = 'recall-debug-label';
+                    labelEl.textContent = label;
+                    const valueEl = document.createElement('span');
+                    valueEl.className = 'recall-debug-value';
+                    valueEl.textContent = value;
+                    itemEl.append(labelEl, valueEl);
+                    fragment.appendChild(itemEl);
+                });
+                debugGridEl.appendChild(fragment);
+            }
+
+            // 摘要：命中条数 + 检索方式；父子分块时额外说明"下方展示的是父块正文"
+            const parentChildHit = (data.items || []).some(it => it.parent_chunk_id !== null && it.parent_chunk_id !== undefined);
+            summaryEl.textContent = `找到 ${data.total} 条结果 | 平均分数: ${data.avg_similarity}`
+                + ` | 检索: ${payload.retrieval_mode}`
+                + (parentChildHit ? ' | 父子分块：命中子块，下方展示所属父块正文' : '');
+
+            listEl.innerHTML = '';
+            if (data.items.length === 0) {
+                listEl.innerHTML = '<div class="empty" style="padding:30px 0;"><p>未找到匹配结果</p></div>';
+                return;
+            }
+
+            data.items.forEach(item => {
+                const div = document.createElement('div');
+                div.className = 'recall-item';
+
+                const hitTag = item.hit_source === 'index_question'
+                    ? '<span class="hit-source-tag hit-source-index">索引</span>' : '';
+
+                let scoreTags = `<span class="recall-score-tag score-fused">融合: ${item.fused_score}</span>`;
+                if (item.rerank_score !== null && item.rerank_score !== undefined) {
+                    scoreTags += ` <span class="recall-score-tag score-rerank">Rerank: ${item.rerank_score}</span>`;
+                }
+
+                // 父子分块：把"命中的子块（检索单元）"和"所属父块（喂给大模型的上下文）"分开展示，
+                // 与引用弹窗的定位口径一致（文档 → 父块 → 命中的子块）
+                const isParentChild = (item.parent_chunk_id !== null && item.parent_chunk_id !== undefined);
+                const mergedNote = (isParentChild && item.hit_child_count > 1)
+                    ? `　·　该父块命中 ${item.hit_child_count} 个子块（已去重，只投喂一次）` : '';
+                const pathNote = (item.hit_paths && item.hit_paths.length)
+                    ? `　·　命中路径: ${item.hit_paths.join(', ')}` : '';
+
+                const headerHtml = `
+                    <div class="recall-item-header">
+                        <span class="recall-rank">#${item.rank}${hitTag}</span>
+                        <div class="recall-scores">
+                            ${scoreTags}
+                            <span>Dense: ${item.dense_sim}</span>
+                            <span>Sparse: ${item.sparse_sim}</span>
+                        </div>
+                    </div>`;
+
+                if (isParentChild) {
+                    const others = (item.merged_children || [])
+                        .filter(c => c.chunk_id !== item.child_chunk_id);
+                    div.innerHTML = headerHtml + `
+                        <div class="recall-loc">
+                            文档: ${escHTML(item.source || '-')} | 父块 #${item.parent_index}（命中子块 #${item.sense_index}）${mergedNote}${pathNote}
+                        </div>
+                        <div class="recall-block">
+                            <div class="recall-block-title">命中子块 #${item.sense_index}（检索单元，向量库里存的就是它）</div>
+                            <div class="recall-content">${escHTML(item.child_content || '')}</div>
+                        </div>
+                        <div class="recall-block parent">
+                            <div class="recall-block-title">所属父块 #${item.parent_index}（生成回答时提供给大模型）</div>
+                            <div class="recall-content recall-collapsed">${escHTML(item.content)}</div>
+                            <div class="recall-more" onclick="toggleRecallBlock(this)">展开父块正文</div>
+                        </div>
+                        ${others.length ? `<div class="recall-merged">同一父块还被这些子块命中（已合并，不重复投喂）：
+                            ${others.map(c => `#${c.sense_index}（分 ${c.final_score}）`).join('、')}</div>` : ''}
+                    `;
+                } else {
+                    div.innerHTML = headerHtml + `
+                        <div class="recall-source">来源: ${escHTML(item.source || '-')} | 块 #${item.chunk_index}${pathNote}</div>
+                        <div class="recall-content">${escHTML(item.content)}</div>
+                    `;
+                }
+                listEl.appendChild(div);
+            });
+        }
+
+        /* ═══════════════ 索引问题（第8章） ═══════════════ */
+
+        let currentIndexId = null;      // 当前选中的索引问题
+
+        // Ch8 全局 loading 遮罩工具函数
+        function showLoading(msg) {
+            document.getElementById('loading-msg').textContent = msg || '处理中...';
+            document.getElementById('global-loading').classList.add('active');
+        }
+        function hideLoading() {
+            document.getElementById('global-loading').classList.remove('active');
+        }
+
+        // ── 新增索引问题弹窗 ──
+        function openCreateIndexDialog() {
+            document.getElementById('idx-question-input').value = '';
+            document.getElementById('create-index-error').style.display = 'none';
+            document.getElementById('create-index-overlay').classList.add('active');
+            document.getElementById('idx-question-input').focus();
+        }
+        function closeCreateIndexDialog(e) {
+            if (e && e.target !== document.getElementById('create-index-overlay')) return;
+            document.getElementById('create-index-overlay').classList.remove('active');
+        }
+        async function confirmCreateIndex() {
+            const question = document.getElementById('idx-question-input').value.trim();
+            const errorEl = document.getElementById('create-index-error');
+            if (!question) {
+                errorEl.textContent = '问题内容不能为空';
+                errorEl.style.display = 'block';
+                return;
+            }
+            showLoading('正在创建索引问题...');
+            try {
+                const resp = await fetch(`${API}/kb/${currentKB.kb_id}/index-questions`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ question }),
+                });
+                if (resp.ok) {
+                    closeCreateIndexDialog();
+                    loadIndexQuestions();
+                } else {
+                    const data = await resp.json();
+                    errorEl.textContent = data.detail?.message || data.detail || '创建失败';
+                    errorEl.style.display = 'block';
+                }
+            } finally {
+                hideLoading();
+            }
+        }
+
+        // ── 索引问题列表 ──
+        async function loadIndexQuestions() {
+            const resp = await fetch(`${API}/kb/${currentKB.kb_id}/index-questions`);
+            const data = await resp.json();
+            const items = data.data.items;
+            const list = document.getElementById('idx-list');
+            const empty = document.getElementById('idx-empty');
+            list.innerHTML = '';
+            if (items.length === 0) {
+                empty.style.display = 'block';
+                resetCandidates();
+                currentIndexId = null;
+                return;
+            }
+            empty.style.display = 'none';
+            items.forEach(iq => {
+                const li = document.createElement('li');
+                li.className = 'idx-item' + (iq.index_id === currentIndexId ? ' active' : '');
+                li.id = `idx-${iq.index_id}`;
+                const sourceTag = iq.source === 'ai'
+                    ? '<span class="idx-source-tag idx-source-ai">AI</span>'
+                    : '<span class="idx-source-tag idx-source-manual">手动</span>';
+                li.innerHTML = `
+                    <div class="idx-question" onclick="selectIndexQuestion('${iq.index_id}')">${escHTML(iq.question)}</div>
+                    <div class="idx-row">
+                        <div class="idx-tags">${sourceTag}<span class="idx-link-count">${iq.link_count} 关联</span></div>
+                        <div class="idx-meta">${escHTML(iq.created_at || '')}</div>
+                        <div class="idx-actions" onclick="event.stopPropagation()">
+                            <button class="btn btn-sm btn-cancel" onclick="editIndexQuestion('${iq.index_id}')" title="编辑">✎</button>
+                            <button class="btn btn-sm btn-danger" onclick="deleteIndexQuestion('${iq.index_id}')" title="删除">×</button>
+                        </div>
+                    </div>
+                    <div class="idx-edit-area" style="display:none;">
+                        <textarea class="idx-edit-input"></textarea>
+                        <div class="idx-edit-actions">
+                            <button class="btn btn-sm btn-primary" onclick="saveEditorIndexQuestion()">保存</button>
+                            <button class="btn btn-sm btn-cancel" onclick="cancelEditIndexQuestion()">取消</button>
+                        </div>
+                    </div>
+                `;
+                list.appendChild(li);
+            });
+            // 若当前选中项仍存在则保持，否则默认选中第一个
+            if (!currentIndexId || !document.getElementById(`idx-${currentIndexId}`)) {
+                items.length && selectIndexQuestion(items[0].index_id);
+            } else {
+                loadCandidates();
+            }
+        }
+
+        // ── 选中索引问题 ──
+        function selectIndexQuestion(index_id) {
+            currentIndexId = index_id;
+            document.querySelectorAll('.idx-item').forEach(el => el.classList.remove('active'));
+            document.getElementById(`idx-${index_id}`)?.classList.add('active');
+            const iq = document.getElementById(`idx-${index_id}`)?.querySelector('.idx-question')?.textContent || '';
+            document.getElementById('candidate-title').textContent = `候选 Chunk · ${iq}`;
+            loadCandidates();
+        }
+
+        // ── 候选 chunk 列表 ──
+        let debounceTimer = null;
+        function debounceLoadCandidates() { clearTimeout(debounceTimer); debounceTimer = setTimeout(loadCandidates, 300); }
+
+        async function loadFileSelect(items) {
+            const sel = document.getElementById('filter-file-name');
+            const keep = sel.value;
+            const files = [...new Set(items.map(i => i.source).filter(Boolean))];
+            sel.innerHTML = '<option value="">全部文件</option>' +
+                files.map(f => `<option value="${escHTML(f)}">${escHTML(f)}</option>`).join('');
+            sel.value = keep;
+        }
+
+        async function loadCandidates() {
+            const idxId = currentIndexId || '';
+            const params = new URLSearchParams({ index_id: idxId });
+            const link = document.getElementById('filter-link-status').value;
+            const file = document.getElementById('filter-file-name').value;
+            const kw = document.getElementById('filter-keyword').value.trim();
+            if (link !== 'all') params.set('link_filter', link);
+            if (file) params.set('file_name', file);
+            if (kw) params.set('keyword', kw);
+
+            const resp = await fetch(`${API}/kb/${currentKB.kb_id}/index-chunk-candidates?${params.toString()}`);
+            const data = await resp.json();
+            const items = data.data.items;
+            await loadFileSelect(items);
+
+            const list = document.getElementById('candidate-list');
+            const empty = document.getElementById('candidate-empty');
+            document.getElementById('candidate-count').textContent = `${items.length} 条`;
+            list.innerHTML = '';
+            if (!idxId || items.length === 0) {
+                empty.style.display = 'block';
+                empty.innerHTML = !idxId ? '<p>请先在左侧选中一个索引问题</p>' : '<p>无匹配 chunk</p>';
+                return;
+            }
+            empty.style.display = 'none';
+            items.forEach(c => {
+                const div = document.createElement('div');
+                div.className = 'candidate-item' + (c.linked ? ' linked' : '');
+                div.innerHTML = `
+                    <input type="checkbox" class="candidate-check" ${c.linked ? 'checked' : ''}
+                           onchange="toggleLink('${c.chunk_id}', this.checked)">
+                    <div class="candidate-info">
+                        <div class="candidate-source">${escHTML(c.source)} · 块 ${c.chunk_index}${c.linked ? '<span class="linked-badge">已关联</span>' : ''}</div>
+                        <div class="candidate-content" title="点击查看完整内容"
+                             onclick="showChunkView(this, '${escHTML(c.source)}', '${c.chunk_index}')">${escHTML(c.content)}</div>
+                    </div>
+                `;
+                list.appendChild(div);
+            });
+        }
+
+        // ── 查看完整 chunk 内容 ──
+        function showChunkView(contentEl, source, chunk_index) {
+            // contentEl 是 .candidate-content，CSS 仅做视觉截断，textContent 实为全文
+            document.getElementById('chunk-view-title').textContent =
+                `Chunk 内容 · ${source} · 块 ${chunk_index}`;
+            const body = document.getElementById('chunk-view-body');
+            body.textContent = contentEl.textContent;
+            document.getElementById('chunk-view-overlay').classList.add('active');
+        }
+        function closeChunkView(e) {
+            if (e && e.target !== document.getElementById('chunk-view-overlay')) return;
+            document.getElementById('chunk-view-overlay').classList.remove('active');
+        }
+
+        // ── 绑定 / 解绑 chunk ──
+        async function toggleLink(chunk_id, checked) {
+            const url = `${API}/kb/${currentKB.kb_id}/index-questions/${currentIndexId}/links`;
+            if (checked) {
+                await fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ items: [{ chunk_id }] }),
+                });
+            } else {
+                await fetch(url, {
+                    method: 'DELETE',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ chunk_id }),
+                });
+            }
+            loadCandidates();
+            loadIndexQuestions();
+        }
+
+        // ── 编辑索引问题 ──
+        function editIndexQuestion(index_id) {
+            const li = document.getElementById(`idx-${index_id}`);
+            const q = li.querySelector('.idx-question').textContent;
+            li.querySelector('.idx-question').style.display = 'none';
+            const area = li.querySelector('.idx-edit-area');
+            area.style.display = 'grid';
+            area.querySelector('.idx-edit-input').value = q;
+            document.getElementById('editing-index-id')?.remove();
+            const hidden = document.createElement('span');
+            hidden.id = 'editing-index-id';
+            hidden.style.display = 'none';
+            hidden.textContent = index_id;
+            area.appendChild(hidden);
+        }
+        function saveEditorIndexQuestion() {
+            const hidden = document.getElementById('editing-index-id');
+            if (!hidden) return;
+            const index_id = hidden.textContent;
+            const input = document.querySelector(`#idx-${index_id} .idx-edit-input`).value.trim();
+            if (!input) { alert('问题内容不能为空'); return; }
+            (async () => {
+                showLoading('正在保存索引问题...');
+                try {
+                    const resp = await fetch(`${API}/kb/${currentKB.kb_id}/index-questions/${index_id}`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ question: input }),
+                    });
+                    if (resp.ok) cancelEditIndexQuestion();
+                    else { const d = await resp.json(); alert(d.detail || '更新失败'); }
+                } finally {
+                    hideLoading();
+                }
+            })();
+        }
+        function cancelEditIndexQuestion() {
+            document.querySelectorAll('.idx-item').forEach(li => {
+                li.querySelector('.idx-question').style.display = '';
+                li.querySelector('.idx-edit-area').style.display = 'none';
+            });
+            document.getElementById('editing-index-id')?.remove();
+        }
+
+        // ── 删除索引问题 ──
+        async function deleteIndexQuestion(index_id) {
+            if (!confirm('确定删除该索引问题？其关联关系将一并解除。')) return;
+            const resp = await fetch(`${API}/kb/${currentKB.kb_id}/index-questions/${index_id}`, { method: 'DELETE' });
+            if (resp.ok) {
+                if (currentIndexId === index_id) { currentIndexId = null; resetCandidates(); }
+                loadIndexQuestions();
+            } else {
+                const d = await resp.json();
+                alert(d.detail?.message || d.detail || '删除失败');
+            }
+        }
+
+        // ── 索引命中测试 ──
+        function toggleMatchedQuestions() {
+            const body = document.getElementById('mq-body');
+            const arrow = document.getElementById('mq-arrow');
+            const shown = body.style.display !== 'none';
+            body.style.display = shown ? 'none' : 'block';
+            arrow.textContent = shown ? '▸' : '▾';
+        }
+        async function viewIndexLinks(index_id) {
+            try {
+                const resp = await fetch(`${API}/kb/${currentKB.kb_id}/index-questions/${index_id}/links`);
+                const data = await resp.json();
+                const links = data.data?.items || [];
+                if (!links.length) { alert('该索引问题尚未绑定任何 chunk'); return; }
+                const list = links.map((l, i) =>
+                    `<div class="chunk-block"><div class="chunk-head"><span>来源 ${escHTML(l.source || '-')} · 块 ${l.chunk_index}</span></div><div class="chunk-content">${escHTML(l.chunk_text || l.content || '')}</div></div>`
+                ).join('');
+                openChunkViewModal(`绑定块 · ${escHTML(data.data.question || '')}`, `<div class="chunk-list">${list}</div>`);
+            } catch (e) {
+                alert('加载绑定块失败: ' + e);
+            }
+        }
+        // 通用小弹窗（复用 chunk-view-overlay）
+        function openChunkViewModal(title, bodyHtml) {
+            document.getElementById('chunk-view-title').textContent = title;
+            const b = document.getElementById('chunk-view-body');
+            b.innerHTML = bodyHtml;
+            document.getElementById('chunk-view-overlay').classList.add('active');
+        }
+
+        async function runIndexRetrieve() {
+            const query = document.getElementById('index-retrieve-query').value.trim();
+            const box = document.getElementById('index-retrieve-result');
+            if (!query) { alert('请输入查询文本'); return; }
+            box.innerHTML = '检索中...';
+            const resp = await fetch(`${API}/kb/${currentKB.kb_id}/index-retrieve`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    query,
+                    top_k: 5,
+                    min_score: parseFloat(document.getElementById('index-retrieve-min-score').value) || 0.5,
+                }),
+            });
+            const data = await resp.json();
+            if (!resp.ok) { box.innerHTML = `<span style="color:#ff4d4f">${escHTML(data.detail || '检索失败')}</span>`; return; }
+            const result = data.data;
+            if (result.total === 0) {
+                box.innerHTML = '<p style="color:#999;">未命中任何索引问题</p>';
+                return;
+            }
+            box.innerHTML = `<div class="recall-summary">命中 ${result.matched_questions} 个索引问题，返回 ${result.total} 个相关 chunk</div>`;
+
+            // 【新增】命中索引问题清单（可折叠，默认收起，每条可查看绑定块）
+            const mqs = result.matched_index_questions || [];
+            if (mqs.length > 0) {
+                let mqHtml = '<div style="margin-bottom:12px; background:#f9f9ff; border:1px solid #d6e4ff; border-radius:6px; overflow:hidden;">';
+                // 折叠标题栏：点击 toggle 展开/收起
+                mqHtml += `<div id="mq-toggle" onclick="toggleMatchedQuestions()" style="display:flex; align-items:center; justify-content:space-between; padding:10px 12px; cursor:pointer; user-select:none;">`;
+                mqHtml += `<span style="font-weight:600; color:#1677ff; font-size:13px;">命中的索引问题 (${mqs.length})</span>`;
+                mqHtml += `<span id="mq-arrow" style="color:#1677ff; font-size:13px;">▸</span>`;
+                mqHtml += '</div>';
+                // 主体内容，默认 display:none（收起）
+                mqHtml += `<div id="mq-body" style="display:none; border-top:1px solid #d6e4ff; padding:6px 12px 10px;">`;
+                mqHtml += mqs.map((mq) => `
+                    <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; padding:6px 0; border-top:${mq === mqs[0] ? 'none' : '1px dashed #eee'};">
+                        <span id="mq-question-${escHTML(mq.index_id)}" style="font-size:13px; flex:1;">${escHTML(mq.question)}</span>
+                        <span class="recall-score-tag score-fused" style="flex-shrink:0;">${mq.similarity.toFixed(3)}</span>
+                        <button class="btn btn-sm btn-primary" style="flex-shrink:0;" onclick="viewIndexLinks('${escHTML(mq.index_id)}')">查看块</button>
+                    </div>`).join('');
+                mqHtml += '</div></div>';
+                box.innerHTML += mqHtml;
+            }
+
+            result.items.forEach((it, i) => {
+                box.innerHTML += `
+                    <div class="recall-item">
+                        <div class="recall-item-header">
+                            <span class="recall-rank">#${i + 1}</span>
+                            <span class="recall-score-tag score-fused">相似度 ${it.similarity.toFixed(3)}</span>
+                        </div>
+                        <div class="recall-source">来源: ${escHTML(it.source || '-')} | 块: ${it.chunk_index} | 命中: 索引问题</div>
+                        <div class="recall-content">${escHTML(it.content)}</div>
+                    </div>`;
+            });
+        }
+
+        // ── 自动生成索引问题 ──
+        function openBuildDialog() {
+            document.getElementById('build-result').innerHTML = '';
+            document.getElementById('build-error').style.display = 'none';
+            document.getElementById('build-overlay').classList.add('active');
+        }
+        function closeBuildDialog(e) {
+            if (e && e.target !== document.getElementById('build-overlay')) return;
+            document.getElementById('build-overlay').classList.remove('active');
+        }
+        // Ch11 改造：build 改为异步任务，接口立即返回 task_id（queued），
+        // 这里轮询 GET /api/index-build-tasks/{task_id} 直至终态，再展示生成结果。
+        async function confirmBuild() {
+            const prompt = document.getElementById('build-prompt').value.trim() || null;
+            closeBuildDialog();
+            showLoading('已提交生成任务，正在创建索引问题，请稍候...');
+            let task_id = null;
+            try {
+                const resp = await fetch(`${API}/kb/${currentKB.kb_id}/index-questions/build`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ prompt }),
+                });
+                const data = await resp.json();
+                if (!resp.ok) {
+                    hideLoading();
+                    openBuildDialog();
+                    document.getElementById('build-result').innerHTML =
+                        `<span style="color:#ff4d4f;">${escHTML(data.detail || '生成任务提交失败')}</span>`;
+                    return;
+                }
+                task_id = data.data.task_id;
+                // 轮询等待异步任务完成
+                while (true) {
+                    await new Promise(r => setTimeout(r, 2000));
+                    const tr = await fetch(`${API}/index-build-tasks/${task_id}`, {
+                        headers: { 'Content-Type': 'application/json' },
+                    });
+                    const td = await tr.json();
+                    if (!tr.ok) break;
+                    const task = td.data;
+                    showLoading(`正在生成索引问题：${escHTML(task.step_message || task.status)}...`);
+                    if (task.status === 'completed') break;
+                    if (task.status === 'failed') break;
+                }
+                hideLoading();
+                openBuildDialog();
+                const finalTr = await fetch(`${API}/index-build-tasks/${task_id}`, {
+                    headers: { 'Content-Type': 'application/json' },
+                });
+                const finalTd = await finalTr.json();
+                if (finalTr.ok) {
+                    const task = finalTd.data;
+                    if (task.status === 'completed') {
+                        document.getElementById('build-result').innerHTML =
+                            `<span style="color:#52c41a;">完成！${escHTML(task.step_message || '已生成索引问题')}</span>`;
+                        loadIndexQuestions();
+                    } else {
+                        document.getElementById('build-result').innerHTML =
+                            `<span style="color:#ff4d4f;">生成失败：${escHTML(task.error_message || task.step_message || task.status)}</span>`;
+                    }
+                }
+            } catch (err) {
+                hideLoading();
+                openBuildDialog();
+                document.getElementById('build-result').innerHTML =
+                    `<span style="color:#ff4d4f;">请求异常：${escHTML(String(err))}</span>`;
+            }
+        }
+
+        function resetCandidates() {
+            document.getElementById('candidate-list').innerHTML = '';
+            document.getElementById('candidate-empty').style.display = 'block';
+            document.getElementById('candidate-empty').innerHTML = '<p>请先在左侧选中一个索引问题</p>';
+            document.getElementById('candidate-count').textContent = '';
+            document.getElementById('candidate-title').textContent = 'Chunk 候选列表';
+        }
+
+        // ═══ Ch9 认证逻辑 ═══
+        let currentUser = null;
+        let isRegisterMode = false;
+
+        function showLoginPage() {
+            document.getElementById('auth-overlay').style.display = 'flex';
+            document.getElementById('main-app').style.display = 'none';
+        }
+
+        function toggleAuthMode() {
+            isRegisterMode = !isRegisterMode;
+            document.getElementById('auth-title').textContent = isRegisterMode ? '注册' : '登录';
+            const btn = document.querySelector('.auth-card .btn-submit');
+            btn.textContent = isRegisterMode ? '注册' : '登录';
+            document.getElementById('auth-display-group').style.display = isRegisterMode ? 'block' : 'none';
+            document.getElementById('auth-switch').innerHTML = isRegisterMode
+                ? '已有账号？<a onclick="toggleAuthMode()">去登录</a>'
+                : '还没有账号？<a onclick="toggleAuthMode()">立即注册</a>';
+        }
+
+        async function submitAuth() {
+            const username = document.getElementById('auth-username').value.trim();
+            const password = document.getElementById('auth-password').value;
+            const display = document.getElementById('auth-display').value.trim();
+            const errorEl = document.getElementById('auth-error');
+
+            if (!username || !password) {
+                errorEl.textContent = '用户名和密码不能为空';
+                errorEl.style.display = 'block';
+                return;
+            }
+
+            const url = isRegisterMode ? '/api/auth/register' : '/api/auth/login';
+            const body = isRegisterMode
+                ? { username, password, display_name: display || null }
+                : { username, password };
+
+            const resp = await fetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body),
+            });
+
+            if (resp.ok) {
+                await checkAuth();
+            } else {
+                let msg = '操作失败';
+                try {
+                    const data = await resp.json();
+                    msg = (typeof data.detail === 'string' ? data.detail : (data.detail && data.detail.message)) || msg;
+                } catch (e) {}
+                errorEl.textContent = msg;
+                errorEl.style.display = 'block';
+            }
+        }
+
+        async function logout() {
+            await fetch('/api/auth/logout', { method: 'POST' });
+            currentUser = null;
+            showLoginPage();
+        }
+
+        async function checkAuth() {
+            let ok = false;
+            try {
+                const resp = await fetch('/api/auth/me');
+                ok = resp.ok;
+                if (resp.ok) {
+                    const result = await resp.json();
+                    currentUser = result.data;
+                    document.getElementById('current-username').textContent =
+                        currentUser.display_name || currentUser.username;
+                    document.getElementById('current-role').textContent =
+                        currentUser.role === 'admin' ? '(管理员)' : '';
+                    document.getElementById('auth-overlay').style.display = 'none';
+                    document.getElementById('main-app').style.display = 'block';
+                    loadKBs();
+                    // 带 ?kb_id= 进来（从问答页/观测页返回）时直接打开该知识库详情
+                    openKbFromUrl();
+                }
+            } catch (e) {
+                ok = false;
+            }
+            if (!ok) {
+                showLoginPage();
+            }
+        }
+
+        // 全局 401 拦截：身份失效时统一回到登录页（覆盖所有业务 fetch）
+        const _originalFetch = window.fetch;
+        window.fetch = async function (...args) {
+            const resp = await _originalFetch(...args);
+            if (resp.status === 401 && typeof showLoginPage === 'function') {
+                showLoginPage();
+            }
+            return resp;
+        };
+
+        // 页面初始化：先检查登录状态，再决定显示登录页还是主界面
+        checkAuth();
+        syncRecallMode();   // 初始化召回测试"运行模式 ↔ 高级能力"的联动状态
+    </script>
+    </div>
+</body>
+</html>
