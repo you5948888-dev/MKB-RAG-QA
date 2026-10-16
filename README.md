@@ -4,7 +4,7 @@
 
 面向私有知识库的检索增强问答系统：文档解析 → 分块 → 向量化入库 → 混合检索 → Rerank → 上下文组装 → 流式生成与引用溯源。
 
-技术栈：FastAPI · Milvus · BGE-M3 · Qwen · Celery + Redis · SQLite · Docker
+技术栈：RAG（混合检索 + Rerank + 引用溯源）· Advanced RAG（改写 / 多查询 / HyDE / 多路融合）· Qwen + `langchain-openai` · FastAPI · Milvus · Celery + Redis · SQLite · Docker
 
 > **运行前提**：完整跑通需要自备 Milvus、Redis、BGE（向量化 + Rerank）与 OpenAI 兼容的 LLM 服务。
 > **没有这些也能验证**：`pytest tests -q` —— 201 项离线集成测试，不需要任何外部服务。
